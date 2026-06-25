@@ -1,0 +1,199 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-accent: 139, 76, 241;
+    --color-accent-hover: 121, 59, 232;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0F1117;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #21262D;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #30363D;
+  }
+
+  ::selection {
+    background: rgba(139, 76, 241, 0.3);
+    color: #E6EDF3;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: #0F1117;
+    color: #E6EDF3;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 13px;
+    line-height: 20px;
+  }
+
+  #root {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  input, textarea, select {
+    font-family: inherit;
+    font-size: 13px;
+    background: #0F1117;
+    border: 1px solid #21262D;
+    color: #E6EDF3;
+    padding: 6px 10px;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+
+  input:focus, textarea:focus, select:focus {
+    border-color: rgb(var(--color-accent));
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: #6E7681;
+  }
+
+  select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236E7681' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+}
+
+@layer components {
+  .section-header {
+    @apply text-[11px] uppercase tracking-[0.08em] font-semibold text-muted select-none;
+  }
+
+  .btn {
+    @apply px-3 py-1.5 rounded text-[13px] font-medium transition-colors duration-150 cursor-pointer select-none inline-flex items-center gap-1.5;
+  }
+
+  .btn-accent {
+    @apply btn;
+    color: rgb(var(--color-accent));
+    border: 1px solid rgba(139, 76, 241, 0.3);
+    background-color: rgba(139, 76, 241, 0.1);
+  }
+
+  .btn-accent:hover {
+    color: #ffffff;
+    border: 1px solid rgba(139, 76, 241, 0.5);
+    background-color: rgba(139, 76, 241, 0.2);
+  }
+
+  .btn-surface {
+    @apply btn bg-surface text-primary border border-border;
+  }
+
+  .btn-surface:hover {
+    @apply bg-[#1C2129];
+  }
+
+  .btn-danger {
+    @apply btn bg-danger/10 text-danger border border-danger/20;
+  }
+
+  .btn-danger:hover {
+    @apply bg-danger/20;
+  }
+
+  .btn-ghost {
+    @apply btn text-muted bg-transparent;
+  }
+
+  .btn-ghost:hover {
+    @apply text-primary bg-surface;
+  }
+
+  .panel {
+    @apply bg-surface border border-border rounded-md;
+  }
+
+  .input-field {
+    @apply w-full bg-bg border border-border rounded text-primary text-[13px] px-2.5 py-1.5 outline-none transition-colors duration-150;
+  }
+
+  .input-field:focus {
+    @apply border-accent;
+  }
+
+  .drag-region {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+
+  .code-text {
+    @apply font-mono text-code;
+  }
+
+  .branch-text {
+    @apply font-mono text-branch text-accent;
+  }
+
+  .diff-added {
+    @apply bg-diff-add-bg text-diff-add-text;
+  }
+
+  .diff-removed {
+    @apply bg-diff-remove-bg text-diff-remove-text;
+  }
+
+  .fade-in {
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  .slide-in {
+    animation: slideIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .spinner {
+    animation: spin 1s linear infinite;
+  }
+}
