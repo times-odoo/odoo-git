@@ -6,31 +6,10 @@ OdooGit is a simple desktop Git client designed specifically for Odoo developers
 
 ## Key Features
 
-### 1. 🌿 Advanced Git Version Control
-* **Branch & Remote Management**: Easily fetch, pull, push, checkout, rename, or delete local and remote branches.
-* **Smart Commits**: Write guidelines-compliant commit messages, amend the last commit (with or without message editing), and stage/unstage files easily.
-* **Visual Diff Viewer**: Interactive, color-coded side-by-side diff viewer with support for staged vs. unstaged files and raw git diff arguments.
-* **Stash Controller**: Save, list, view, apply, pop, or drop git stashes.
-* **Cherry-Picking & Rebasing**: Full support for interactive git rebase (continue/abort) and cherry-picking commits.
-* **Multi-Repo Switcher**: Seamlessly switch between multiple repositories (e.g. Odoo Community, Enterprise, Design, Themes).
-* **Grep Panel**: Multi-revision search to grep for terms across working trees or specific commit versions.
-
-### 2. 🗄️ PostgreSQL Database Orchestration
-* **Virtual DB Creation**: Create databases without templates by registering them as pending names. This allows Odoo to automatically initialize them on launch (installing base modules and building the correct Odoo schema) rather than creating empty databases.
-* **Template Duplication**: Instantly copy or clone existing PostgreSQL template databases.
-* **Database Cleanup**: Seamlessly drop database environments, removing them from both the database manager and local stores.
-* **Branch-to-DB Mapping**: Bind specific git branches to designated databases, making Odoo automatically load the correct database when you switch branches.
-
-### 3. ⚙️ Odoo Server Integration
-* **Multi-mode Execution**: Spin up Odoo servers in `run`, `upgrade`, or `test` mode.
-* **Granular Options**: Customize addons paths, upgrade utility paths, run ports, interface options, test tags, and modules to install (`-i`) or update (`-u`).
-* **Environment Control**: Manage python virtual environments (`venv`) and set venv paths dynamically.
-* **Terminal Console**: Live Odoo logs console built into the UI, with support for opening the server in an external terminal window (`gnome-terminal`).
-* **Auto Cleanup**: Keeps your system tidy by automatically closing the Odoo server process group when you shut down the Electron application.
-
-### 4. 🧰 Extras
-* **Grammar Verification**: Verify git commit messages or comments on the fly using a built-in grammar checker powered by the LanguageTool public API.
-* **GitHub Integration**: Manage Personal Access Tokens (PATs), verify connections, and automatically sync credentials to your global `~/.git-credentials` helper.
+* **Streamlined Git Workflows**: Navigate development across multiple Odoo repositories (Community, Enterprise, Themes) without leaving the app. You can stage changes, review diffs, manage branches, and perform interactive rebases or cherry-picks. The integrated search allows you to grep for terms across your active working tree or specific commit revisions.
+* **Smart Database Management**: Control your PostgreSQL database environments without manual terminal scripting. You can duplicate template databases, drop obsolete setups, or queue new databases to initialize automatically on startup. You can also link specific Git branches to designated databases so the correct environment loads automatically when you switch branches.
+* **Unified Odoo Server Controls**: Run, upgrade, or test your Odoo instances from a single console. The application manages Python virtual environments (`venvs`) and makes it simple to specify addons, custom arguments, and modules to update or install. Monitor live output via the built-in console, or launch the server in an external window when needed. The app automatically frees up target ports before startup and cleans up running server processes on exit.
+* **Developer Conveniences**: Features integrated helpers to manage GitHub authentication tokens, verify user credentials, and automatically update configurations to keep your local environment synchronized.
 
 ---
 

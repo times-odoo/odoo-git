@@ -111,6 +111,57 @@ function buildOdooCommand(opts: any): { execCmd: string; execArgs: string[]; ful
   return { execCmd, execArgs, fullCommandString };
 }
 
+function getPortFromOpts(opts: any): number {
+  let port = opts.port;
+  if (port === undefined && opts.customArgs) {
+    const longPortMatch = opts.customArgs.match(/--http-port\s*=\s*(\d+)/);
+    if (longPortMatch) {
+      port = parseInt(longPortMatch[1], 10);
+    } else {
+      const longPortSpaceMatch = opts.customArgs.match(/--http-port\s+(\d+)/);
+      if (longPortSpaceMatch) {
+        port = parseInt(longPortSpaceMatch[1], 10);
+      } else {
+        const shortPortMatch = opts.customArgs.match(/-p\s+(\d+)/);
+        if (shortPortMatch) {
+          port = parseInt(shortPortMatch[1], 10);
+        }
+      }
+    }
+  }
+  if (port === undefined) {
+    port = 8069; // Odoo default port
+  }
+  return port;
+}
+
+function killPort(port: number): Promise<{ killed: boolean; pids?: string[]; error?: string }> {
+  return new Promise((resolve) => {
+    if (port <= 0) {
+      resolve({ killed: false });
+      return;
+    }
+    exec(`lsof -t -i:${port}`, (err, stdout) => {
+      if (err || !stdout.trim()) {
+        resolve({ killed: false });
+        return;
+      }
+      const pids = stdout.trim().split('\n').map(p => p.trim()).filter(Boolean);
+      if (pids.length === 0) {
+        resolve({ killed: false });
+        return;
+      }
+      exec(`kill -9 ${pids.join(' ')}`, (killErr) => {
+        if (killErr) {
+          resolve({ killed: false, pids, error: killErr.message });
+        } else {
+          resolve({ killed: true, pids });
+        }
+      });
+    });
+  });
+}
+
 export function registerIpcHandlers() {
   // Git operations
   ipcMain.handle('git:status', async (_e, repoPath: string) => {
@@ -329,28 +380,6 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('git:clone', async (_e, cloneUrl: string, targetPath: string) => {
     return await gitBridge.cloneRepo(cloneUrl, targetPath);
-  });
-
-  // Grammar check via LanguageTool public API
-  ipcMain.handle('app:checkGrammar', async (_e, text: string) => {
-    try {
-      const params = new URLSearchParams();
-      params.append('text', text);
-      params.append('language', 'en-US');
-      params.append('level', 'picky');
-      const response = await fetch('https://api.languagetoolplus.com/v2/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params.toString(),
-      });
-      if (!response.ok) {
-        return { success: false, matches: [], error: `API returned ${response.status}` };
-      }
-      const data = await response.json();
-      return { success: true, matches: data.matches || [] };
-    } catch (err: any) {
-      return { success: false, matches: [], error: err.message || 'Network error' };
-    }
   });
 
   // App operations
@@ -664,6 +693,17 @@ export function registerIpcHandlers() {
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
+    const port = getPortFromOpts(opts);
+    if (port > 0) {
+      event.sender.send('odoo:log', `[App] Checking if port ${port} is in use...\n`);
+      const killResult = await killPort(port);
+      if (killResult.killed && killResult.pids) {
+        event.sender.send('odoo:log', `[App] Port ${port} was in use by PID(s): ${killResult.pids.join(', ')}. Process killed successfully.\n`);
+      } else if (killResult.error) {
+        event.sender.send('odoo:log', `[App] Warning: Port ${port} was in use by PID(s): ${killResult.pids?.join(', ')}, but failed to kill: ${killResult.error}\n`);
+      }
+    }
+
     const { execCmd, execArgs, fullCommandString } = buildOdooCommand(opts);
     currentCmd = fullCommandString;
     odooStatus = 'starting';
@@ -757,6 +797,10 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('odoo:openExternalTerminal', async (_e, opts: any) => {
     try {
+      const port = getPortFromOpts(opts);
+      if (port > 0) {
+        await killPort(port);
+      }
       const { fullCommandString } = buildOdooCommand(opts);
       const envVars = opts.dbPassword ? `PGPASSWORD=${JSON.stringify(opts.dbPassword)} ` : '';
       const fullCmd = `${envVars}${fullCommandString}`;

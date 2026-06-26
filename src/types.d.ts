@@ -180,18 +180,6 @@ export interface GitAPI {
   saveGithubPat(username: string, pat: string): Promise<void>;
   testGithubPat(pat: string): Promise<{ success: boolean; login: string; name: string; error?: string }>;
   getOdooModules(repoPath: string): Promise<string[]>;
-  checkGrammar(text: string): Promise<{
-    success: boolean;
-    matches: {
-      message: string;
-      shortMessage?: string;
-      offset: number;
-      length: number;
-      replacements: { value: string }[];
-      rule: { id: string; description: string; category: { id: string; name: string } };
-    }[];
-    error?: string;
-  }>;
   onTerminalLog(callback: (data: any) => void): () => void;
   // Window controls
   minimizeWindow(): void;

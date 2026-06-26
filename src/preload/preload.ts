@@ -100,7 +100,6 @@ contextBridge.exposeInMainWorld('git', {
   saveGithubPat: (username: string, pat: string) => ipcRenderer.invoke('app:saveGithubPat', username, pat),
   testGithubPat: (pat: string) => ipcRenderer.invoke('app:testGithubPat', pat),
   getOdooModules: (repoPath: string) => ipcRenderer.invoke('app:getOdooModules', repoPath),
-  checkGrammar: (text: string) => ipcRenderer.invoke('app:checkGrammar', text),
   onTerminalLog: (callback: (data: any) => void) => {
     const subscription = (_event: any, data: any) => callback(data);
     ipcRenderer.on('git:terminal-log', subscription);
