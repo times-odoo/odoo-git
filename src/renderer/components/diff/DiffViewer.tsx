@@ -129,6 +129,27 @@ export function DiffViewer() {
               </svg>
               Loading diff...
             </div>
+          ) : files.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full p-8 max-w-md mx-auto text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center text-accent">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
+                </svg>
+              </div>
+              <h3 className="text-[14px] font-semibold text-primary">No changes detected in Smart Diff</h3>
+              <p className="text-[12px] text-muted leading-relaxed">
+                Smart Diff shows all staged, unstaged, and committed changes in your branch compared to the base branch (<span className="font-mono text-accent">{getSmartDiffBase() || 'odoo/master'}</span>).
+              </p>
+              <div className="bg-surface border border-border/60 rounded-lg p-3.5 w-full text-left space-y-2 text-[11.5px] shadow-sm">
+                <div className="font-bold text-primary uppercase text-[9px] tracking-wider mb-1">How to see changes here:</div>
+                <div className="space-y-1.5 text-muted leading-normal font-sans">
+                  <p>1. Edit files in the project workspace (working directory changes).</p>
+                  <p>2. Stage them in the <span className="text-accent font-semibold font-mono">Git Add</span> panel.</p>
+                  <p>3. Create a commit to save changes to your branch.</p>
+                </div>
+              </div>
+            </div>
           ) : rawDiff ? (
             <HunkView rawDiff={rawDiff} viewMode={diffViewMode} />
           ) : selectedDiffFile ? (

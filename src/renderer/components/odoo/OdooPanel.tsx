@@ -3,6 +3,7 @@ import { useRepoStore } from '../../store/repos';
 import { useGitStore } from '../../store/git';
 import { useUIStore } from '../../store/ui';
 import { Dropdown } from '../shared/Dropdown';
+import { DbDropdown } from '../shared/DbDropdown';
 
 const stripAnsi = (str: string) => {
   return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
@@ -14,9 +15,10 @@ interface ModuleSelectorProps {
   onChange: (mods: string[]) => void;
   allModules: string[];
   placeholder?: string;
+  disabled?: boolean;
 }
 
-export function ModuleSelector({ label, modules, onChange, allModules, placeholder }: ModuleSelectorProps) {
+export function ModuleSelector({ label, modules, onChange, allModules, placeholder, disabled = false }: ModuleSelectorProps) {
   const [inputValue, setInputValue] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
@@ -52,6 +54,7 @@ export function ModuleSelector({ label, modules, onChange, allModules, placehold
     : [];
 
   const addModule = (modName: string) => {
+    if (disabled) return;
     const trimmed = modName.trim();
     if (trimmed && !modules.includes(trimmed)) {
       onChange([...modules, trimmed]);
@@ -62,37 +65,44 @@ export function ModuleSelector({ label, modules, onChange, allModules, placehold
   };
 
   const removeModule = (modName: string) => {
+    if (disabled) return;
     onChange(modules.filter((m) => m !== modName));
   };
 
   return (
     <div className="relative">
       <label className="block text-[10px] text-muted font-bold uppercase mb-1">{label}</label>
-      <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-[#0D1117]/60 border border-border rounded focus-within:border-accent/70 transition-colors w-full cursor-text min-h-[34px]">
+      <div className={`flex flex-wrap items-center gap-1.5 p-1.5 bg-[#0D1117]/60 border border-border rounded focus-within:border-accent/70 transition-colors w-full min-h-[34px] ${
+        disabled ? 'opacity-50 cursor-not-allowed pointer-events-none bg-[#0D1117]/30' : 'cursor-text'
+      }`}>
         {modules.map((m) => (
           <span
             key={m}
             className="inline-flex items-center gap-1 bg-accent/15 text-accent font-semibold px-2 py-0.5 rounded text-[11px] font-mono select-none"
           >
             {m}
-            <button
-              type="button"
-              className="text-danger hover:scale-125 transition-all font-extrabold text-[14px] leading-none shrink-0 ml-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                removeModule(m);
-              }}
-            >
-              ×
-            </button>
+            {!disabled && (
+              <button
+                type="button"
+                className="text-danger hover:scale-125 transition-all font-extrabold text-[14px] leading-none shrink-0 ml-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeModule(m);
+                }}
+              >
+                ×
+              </button>
+            )}
           </span>
         ))}
         <input
           type="text"
-          className="bg-transparent border-none outline-none flex-1 min-w-[120px] text-primary text-[12px] font-mono p-0 h-[20px]"
+          disabled={disabled}
+          className="bg-transparent border-none outline-none flex-1 min-w-[120px] text-primary text-[12px] font-mono p-0 h-[20px] disabled:cursor-not-allowed"
           placeholder={modules.length === 0 ? placeholder : ""}
           value={inputValue}
           onChange={(e) => {
+            if (disabled) return;
             setInputValue(e.target.value);
             setShowSuggestions(true);
             setFocusedIndex(-1);
@@ -176,8 +186,6 @@ export function OdooPanel() {
   // DB list & Statuses
   const [dbs, setDbs] = useState<string[]>([]);
   const [templates, setTemplates] = useState<string[]>([]);
-  const [branchDbMap, setBranchDbMap] = useState<Record<string, string>>({});
-  const [dbFilter, setDbFilter] = useState('');
   const [loadingDbs, setLoadingDbs] = useState(false);
   const [isDbConnected, setIsDbConnected] = useState(false);
 
@@ -201,8 +209,32 @@ export function OdooPanel() {
   const [dupSrcDb, setDupSrcDb] = useState('');
   const [dupDestDb, setDupDestDb] = useState('');
 
+  // Drop DB confirm modal
+  const [showDropConfirmModal, setShowDropConfirmModal] = useState(false);
+  const [dropTargetDb, setDropTargetDb] = useState('');
+
   // Terminal scroll helper
   const terminalEndRef = useRef<HTMLDivElement>(null);
+  const createDbInputRef = useRef<HTMLInputElement>(null);
+  const duplicateDbInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showCreateModal) {
+      setTimeout(() => {
+        createDbInputRef.current?.focus();
+        createDbInputRef.current?.select();
+      }, 50);
+    }
+  }, [showCreateModal]);
+
+  useEffect(() => {
+    if (showDuplicateModal) {
+      setTimeout(() => {
+        duplicateDbInputRef.current?.focus();
+        duplicateDbInputRef.current?.select();
+      }, 50);
+    }
+  }, [showDuplicateModal]);
 
   // Form Configurations
   // Run Server Form
@@ -234,6 +266,13 @@ export function OdooPanel() {
   const [runCustomArgs, setRunCustomArgs] = useState(() => {
     return localStorage.getItem('odoo_runCustomArgs') ?? '';
   });
+  const [runUseCustomCommand, setRunUseCustomCommand] = useState(() => {
+    const saved = localStorage.getItem('odoo_runUseCustomCommand');
+    return saved !== null ? saved === 'true' : false;
+  });
+  const [runCustomCommand, setRunCustomCommand] = useState(() => {
+    return localStorage.getItem('odoo_runCustomCommand') ?? '';
+  });
 
   // Upgrade Form
   const [upUpgradePaths, setUpUpgradePaths] = useState(() => {
@@ -259,6 +298,13 @@ export function OdooPanel() {
   const [upCustomArgs, setUpCustomArgs] = useState(() => {
     return localStorage.getItem('odoo_upCustomArgs') ?? '';
   });
+  const [upUseCustomCommand, setUpUseCustomCommand] = useState(() => {
+    const saved = localStorage.getItem('odoo_upUseCustomCommand');
+    return saved !== null ? saved === 'true' : false;
+  });
+  const [upCustomCommand, setUpCustomCommand] = useState(() => {
+    return localStorage.getItem('odoo_upCustomCommand') ?? '';
+  });
 
   // Test Form
   const [testAddons, setTestAddons] = useState(() => {
@@ -280,6 +326,13 @@ export function OdooPanel() {
   });
   const [testCustomArgs, setTestCustomArgs] = useState(() => {
     return localStorage.getItem('odoo_testCustomArgs') ?? '';
+  });
+  const [testUseCustomCommand, setTestUseCustomCommand] = useState(() => {
+    const saved = localStorage.getItem('odoo_testUseCustomCommand');
+    return saved !== null ? saved === 'true' : false;
+  });
+  const [testCustomCommand, setTestCustomCommand] = useState(() => {
+    return localStorage.getItem('odoo_testCustomCommand') ?? '';
   });
 
   // Module Lists
@@ -317,11 +370,550 @@ export function OdooPanel() {
     }
   });
 
-  const branchKey = communityRepoPath ? `${communityRepoPath}:${currentBranch}` : '';
-  const currentLinkedDb = branchDbMap[branchKey] || null;
+
+
+  // Preset Manager
+  interface OdooPreset {
+    name: string;
+    isCustom?: boolean;
+    odooVersion: string;
+    activeTab: 'run' | 'upgrade' | 'test';
+    venvPath?: string;
+    // run
+    runPort?: number;
+    runDbName?: string;
+    runInterface?: string;
+    runAddons?: string;
+    runInstallModules?: string[];
+    runUpdateModules?: string[];
+    runDevAll?: boolean;
+    runWithDemo?: boolean;
+    runStopAfterInit?: boolean;
+    runCustomArgs?: string;
+    runUseCustomCommand?: boolean;
+    runCustomCommand?: string;
+    // upgrade
+    upUpgradePaths?: string;
+    upAddons?: string;
+    upDbName?: string;
+    upRestoreTemplate?: boolean;
+    upTemplateDb?: string;
+    upUpdateModules?: string[];
+    upStopAfterInit?: boolean;
+    upCustomArgs?: string;
+    upUseCustomCommand?: boolean;
+    upCustomCommand?: string;
+    // test
+    testAddons?: string;
+    testDbName?: string;
+    testTags?: string;
+    testPort?: number;
+    testStopAfterInit?: boolean;
+    testCustomArgs?: string;
+    testUseCustomCommand?: boolean;
+    testCustomCommand?: string;
+  }
+
+  const defaultPresets: OdooPreset[] = [
+    {
+      name: 'Odoo 17.0 Default Run',
+      odooVersion: '17.0',
+      activeTab: 'run',
+      runPort: 8069,
+      runDbName: '',
+      runInterface: '127.0.0.1',
+      runAddons: 'addons,../enterprise',
+      runInstallModules: [],
+      runUpdateModules: [],
+      runDevAll: true,
+      runWithDemo: false,
+      runStopAfterInit: false,
+      runCustomArgs: '',
+    },
+    {
+      name: 'Odoo 17.0 Default Upgrade',
+      odooVersion: '17.0',
+      activeTab: 'upgrade',
+      upUpgradePaths: '../upgrade-util/src,../upgrade/migrations',
+      upAddons: 'addons,../enterprise',
+      upDbName: '',
+      upRestoreTemplate: false,
+      upTemplateDb: '',
+      upUpdateModules: ['base'],
+      upStopAfterInit: true,
+      upCustomArgs: '',
+    },
+    {
+      name: 'Odoo 17.0 Default Test',
+      odooVersion: '17.0',
+      activeTab: 'test',
+      testAddons: 'addons,../enterprise',
+      testDbName: 'test_db',
+      testTags: '',
+      testPort: 0,
+      testStopAfterInit: true,
+      testCustomArgs: '',
+    },
+    {
+      name: 'Odoo 18.0 Default Run',
+      odooVersion: '18.0',
+      activeTab: 'run',
+      runPort: 8069,
+      runDbName: '',
+      runInterface: '127.0.0.1',
+      runAddons: 'addons,../enterprise',
+      runInstallModules: [],
+      runUpdateModules: [],
+      runDevAll: true,
+      runWithDemo: true,
+      runStopAfterInit: false,
+      runCustomArgs: '',
+    },
+    {
+      name: 'Odoo 18.0 Default Upgrade',
+      odooVersion: '18.0',
+      activeTab: 'upgrade',
+      upUpgradePaths: '../upgrade-util/src,../upgrade/migrations',
+      upAddons: 'addons,../enterprise',
+      upDbName: '',
+      upRestoreTemplate: false,
+      upTemplateDb: '',
+      upUpdateModules: ['base'],
+      upStopAfterInit: true,
+      upCustomArgs: '',
+    },
+    {
+      name: 'Odoo 18.0 Default Test',
+      odooVersion: '18.0',
+      activeTab: 'test',
+      testAddons: 'addons,../enterprise',
+      testDbName: 'test_db',
+      testTags: '',
+      testPort: 0,
+      testStopAfterInit: true,
+      testCustomArgs: '',
+    },
+    {
+      name: 'Odoo 19.0 Default Run',
+      odooVersion: '19.0',
+      activeTab: 'run',
+      runPort: 8069,
+      runDbName: '',
+      runInterface: '127.0.0.1',
+      runAddons: 'addons,../enterprise',
+      runInstallModules: [],
+      runUpdateModules: [],
+      runDevAll: true,
+      runWithDemo: true,
+      runStopAfterInit: false,
+      runCustomArgs: '',
+    },
+    {
+      name: 'Odoo 19.0 Default Upgrade',
+      odooVersion: '19.0',
+      activeTab: 'upgrade',
+      upUpgradePaths: '../upgrade-util/src,../upgrade/migrations',
+      upAddons: 'addons,../enterprise',
+      upDbName: '',
+      upRestoreTemplate: false,
+      upTemplateDb: '',
+      upUpdateModules: ['base'],
+      upStopAfterInit: true,
+      upCustomArgs: '',
+    },
+    {
+      name: 'Odoo 19.0 Default Test',
+      odooVersion: '19.0',
+      activeTab: 'test',
+      testAddons: 'addons,../enterprise',
+      testDbName: 'test_db',
+      testTags: '',
+      testPort: 0,
+      testStopAfterInit: true,
+      testCustomArgs: '',
+    },
+  ];
+
+  const [customPresets, setCustomPresets] = useState<OdooPreset[]>(() => {
+    try {
+      const saved = localStorage.getItem('odoo_custom_presets');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [deletedDefaults, setDeletedDefaults] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('odoo_deleted_defaults');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const allPresets = useMemo(() => {
+    const merged = defaultPresets.map((dp) => {
+      const override = customPresets.find((cp) => cp.name === dp.name);
+      return override || dp;
+    }).concat(customPresets.filter((cp) => !defaultPresets.some((dp) => dp.name === cp.name)));
+
+    return merged.filter((p) => !deletedDefaults.includes(p.name));
+  }, [customPresets, deletedDefaults]);
+
+  // Per-tab preset selection — each tab remembers its own last chosen preset
+  const [selectedPresetNames, setSelectedPresetNames] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem('odoo_selectedPresetNames');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  // Derived: the preset name for the currently active tab
+  const selectedPresetName = selectedPresetNames[activeTab] ?? '';
+
+  const setSelectedPresetName = (name: string) => {
+    setSelectedPresetNames((prev) => {
+      const next = { ...prev, [activeTab]: name };
+      localStorage.setItem('odoo_selectedPresetNames', JSON.stringify(next));
+      return next;
+    });
+  };
+  const [showSavePresetModal, setShowSavePresetModal] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+
+  const autoVersion = useMemo(() => {
+    if (currentBranch.includes('16.0')) return '16.0';
+    if (currentBranch.includes('17.0')) return '17.0';
+    if (currentBranch.includes('18.0')) return '18.0';
+    const match = currentBranch.match(/(\d+\.\d+)/);
+    return match ? match[1] : '19.0';
+  }, [currentBranch]);
+
+  const selectedPreset = useMemo(() => {
+    return allPresets.find((p) => p.name === selectedPresetName);
+  }, [allPresets, selectedPresetName]);
+
+  const odooVersion = selectedPreset?.odooVersion || autoVersion;
+
+  // Filter presets based on the active tab
+  const filteredPresets = useMemo(() => {
+    return allPresets.filter((p) => p.activeTab === activeTab);
+  }, [allPresets, activeTab]);
+
+
+
+  const handleApplyPreset = (presetName: string) => {
+    const preset = allPresets.find((p) => p.name === presetName);
+    if (!preset) return;
+    // Store per the preset's own tab so switching back to that tab shows it
+    setSelectedPresetNames((prev) => {
+      const next = { ...prev, [preset.activeTab]: presetName };
+      localStorage.setItem('odoo_selectedPresetNames', JSON.stringify(next));
+      return next;
+    });
+    setActiveTab(preset.activeTab);
+
+    if (preset.venvPath !== undefined) {
+      setSelectedVenv(preset.venvPath);
+      window.odoo.setStoreValue('selectedVenv', preset.venvPath);
+    }
+
+    // Run Tab
+    if (preset.runPort !== undefined) {
+      setRunPort(preset.runPort);
+      localStorage.setItem('odoo_runPort', String(preset.runPort));
+    }
+    if (preset.runDbName !== undefined) {
+      setRunDbName(preset.runDbName);
+      localStorage.setItem('odoo_runDbName', preset.runDbName);
+    }
+    if (preset.runInterface !== undefined) {
+      setRunInterface(preset.runInterface);
+      localStorage.setItem('odoo_runInterface', preset.runInterface);
+    }
+    if (preset.runAddons !== undefined) {
+      setRunAddons(preset.runAddons);
+      localStorage.setItem('odoo_runAddons', preset.runAddons);
+    }
+    if (preset.runInstallModules !== undefined) {
+      setRunInstallModules(preset.runInstallModules);
+      localStorage.setItem('odoo_runInstallModules', JSON.stringify(preset.runInstallModules));
+    }
+    if (preset.runUpdateModules !== undefined) {
+      setRunUpdateModules(preset.runUpdateModules);
+      localStorage.setItem('odoo_runUpdateModules', JSON.stringify(preset.runUpdateModules));
+    }
+    if (preset.runDevAll !== undefined) {
+      setRunDevAll(preset.runDevAll);
+      localStorage.setItem('odoo_runDevAll', String(preset.runDevAll));
+    }
+    if (preset.runWithDemo !== undefined) {
+      setRunWithDemo(preset.runWithDemo);
+      localStorage.setItem('odoo_runWithDemo', String(preset.runWithDemo));
+    }
+    if (preset.runStopAfterInit !== undefined) {
+      setRunStopAfterInit(preset.runStopAfterInit);
+      localStorage.setItem('odoo_runStopAfterInit', String(preset.runStopAfterInit));
+    }
+    if (preset.runCustomArgs !== undefined) {
+      setRunCustomArgs(preset.runCustomArgs);
+      localStorage.setItem('odoo_runCustomArgs', preset.runCustomArgs);
+    }
+    if (preset.runUseCustomCommand !== undefined) {
+      setRunUseCustomCommand(preset.runUseCustomCommand);
+      localStorage.setItem('odoo_runUseCustomCommand', String(preset.runUseCustomCommand));
+    }
+    if (preset.runCustomCommand !== undefined) {
+      setRunCustomCommand(preset.runCustomCommand);
+      localStorage.setItem('odoo_runCustomCommand', preset.runCustomCommand);
+    }
+
+    // Upgrade Tab
+    if (preset.upUpgradePaths !== undefined) {
+      setUpUpgradePaths(preset.upUpgradePaths);
+      localStorage.setItem('odoo_upUpgradePaths', preset.upUpgradePaths);
+    }
+    if (preset.upAddons !== undefined) {
+      setUpAddons(preset.upAddons);
+      localStorage.setItem('odoo_upAddons', preset.upAddons);
+    }
+    if (preset.upDbName !== undefined) {
+      setUpDbName(preset.upDbName);
+      localStorage.setItem('odoo_upDbName', preset.upDbName);
+    }
+    if (preset.upRestoreTemplate !== undefined) {
+      setUpRestoreTemplate(preset.upRestoreTemplate);
+      localStorage.setItem('odoo_upRestoreTemplate', String(preset.upRestoreTemplate));
+    }
+    if (preset.upTemplateDb !== undefined) {
+      setUpTemplateDb(preset.upTemplateDb);
+      localStorage.setItem('odoo_upTemplateDb', preset.upTemplateDb);
+    }
+    if (preset.upUpdateModules !== undefined) {
+      setUpUpdateModules(preset.upUpdateModules);
+      localStorage.setItem('odoo_upUpdateModules', JSON.stringify(preset.upUpdateModules));
+    }
+    if (preset.upStopAfterInit !== undefined) {
+      setUpStopAfterInit(preset.upStopAfterInit);
+      localStorage.setItem('odoo_upStopAfterInit', String(preset.upStopAfterInit));
+    }
+    if (preset.upCustomArgs !== undefined) {
+      setUpCustomArgs(preset.upCustomArgs);
+      localStorage.setItem('odoo_upCustomArgs', preset.upCustomArgs);
+    }
+    if (preset.upUseCustomCommand !== undefined) {
+      setUpUseCustomCommand(preset.upUseCustomCommand);
+      localStorage.setItem('odoo_upUseCustomCommand', String(preset.upUseCustomCommand));
+    }
+    if (preset.upCustomCommand !== undefined) {
+      setUpCustomCommand(preset.upCustomCommand);
+      localStorage.setItem('odoo_upCustomCommand', preset.upCustomCommand);
+    }
+
+    // Test Tab
+    if (preset.testAddons !== undefined) {
+      setTestAddons(preset.testAddons);
+      localStorage.setItem('odoo_testAddons', preset.testAddons);
+    }
+    if (preset.testDbName !== undefined) {
+      setTestDbName(preset.testDbName);
+      localStorage.setItem('odoo_testDbName', preset.testDbName);
+    }
+    if (preset.testTags !== undefined) {
+      setTestTags(preset.testTags);
+      localStorage.setItem('odoo_testTags', preset.testTags);
+    }
+    if (preset.testPort !== undefined) {
+      setTestPort(preset.testPort);
+      localStorage.setItem('odoo_testPort', String(preset.testPort));
+    }
+    if (preset.testStopAfterInit !== undefined) {
+      setTestStopAfterInit(preset.testStopAfterInit);
+      localStorage.setItem('odoo_testStopAfterInit', String(preset.testStopAfterInit));
+    }
+    if (preset.testCustomArgs !== undefined) {
+      setTestCustomArgs(preset.testCustomArgs);
+      localStorage.setItem('odoo_testCustomArgs', preset.testCustomArgs);
+    }
+    if (preset.testUseCustomCommand !== undefined) {
+      setTestUseCustomCommand(preset.testUseCustomCommand);
+      localStorage.setItem('odoo_testUseCustomCommand', String(preset.testUseCustomCommand));
+    }
+    if (preset.testCustomCommand !== undefined) {
+      setTestCustomCommand(preset.testCustomCommand);
+      localStorage.setItem('odoo_testCustomCommand', preset.testCustomCommand);
+    }
+
+    addToast({ type: 'success', message: `Preset "${presetName}" applied.` });
+  };
+
+  const handleSavePreset = () => {
+    if (!newPresetName.trim()) return;
+
+    let suffix = '';
+    if (activeTab === 'run') suffix = ' - Run';
+    else if (activeTab === 'upgrade') suffix = ' - Upgrade';
+    else if (activeTab === 'test') suffix = ' - Test';
+
+    let finalName = newPresetName.trim();
+    if (!finalName.toLowerCase().endsWith(suffix.toLowerCase())) {
+      finalName += suffix;
+    }
+
+    if (allPresets.some((p) => p.name.toLowerCase() === finalName.toLowerCase())) {
+      addToast({ type: 'error', message: 'A preset with this name already exists.' });
+      return;
+    }
+
+    const newPreset: OdooPreset = {
+      name: finalName,
+      isCustom: true,
+      odooVersion,
+      activeTab,
+      venvPath: selectedVenv,
+      runPort,
+      runDbName,
+      runInterface,
+      runAddons,
+      runInstallModules,
+      runUpdateModules,
+      runDevAll,
+      runWithDemo,
+      runStopAfterInit,
+      runCustomArgs,
+      runUseCustomCommand,
+      runCustomCommand,
+      // upgrade
+      upUpgradePaths,
+      upAddons,
+      upDbName,
+      upRestoreTemplate,
+      upTemplateDb,
+      upUpdateModules,
+      upStopAfterInit,
+      upCustomArgs,
+      upUseCustomCommand,
+      upCustomCommand,
+      // test
+      testAddons,
+      testDbName,
+      testTags,
+      testPort,
+      testStopAfterInit,
+      testCustomArgs,
+      testUseCustomCommand,
+      testCustomCommand,
+    };
+
+    const updated = [...customPresets, newPreset];
+    setCustomPresets(updated);
+    localStorage.setItem('odoo_custom_presets', JSON.stringify(updated));
+    setSelectedPresetName(newPreset.name);
+    setNewPresetName('');
+    setShowSavePresetModal(false);
+    addToast({ type: 'success', message: `Preset "${newPreset.name}" saved.` });
+  };
+
+  const handleUpdateCurrentPreset = () => {
+    if (!selectedPresetName) return;
+
+    const updatedPreset: OdooPreset = {
+      name: selectedPresetName,
+      isCustom: true,
+      odooVersion,
+      venvPath: selectedVenv,
+      activeTab,
+      // run
+      runPort,
+      runDbName,
+      runInterface,
+      runAddons,
+      runInstallModules,
+      runUpdateModules,
+      runDevAll,
+      runWithDemo,
+      runStopAfterInit,
+      runCustomArgs,
+      runUseCustomCommand,
+      runCustomCommand,
+      // upgrade
+      upUpgradePaths,
+      upAddons,
+      upDbName,
+      upRestoreTemplate,
+      upTemplateDb,
+      upUpdateModules,
+      upStopAfterInit,
+      upCustomArgs,
+      upUseCustomCommand,
+      upCustomCommand,
+      // test
+      testAddons,
+      testDbName,
+      testTags,
+      testPort,
+      testStopAfterInit,
+      testCustomArgs,
+      testUseCustomCommand,
+      testCustomCommand,
+    };
+
+    const index = customPresets.findIndex((p) => p.name === selectedPresetName);
+    let updated;
+    if (index === -1) {
+      updated = [...customPresets, updatedPreset];
+    } else {
+      updated = [...customPresets];
+      updated[index] = updatedPreset;
+    }
+
+    setCustomPresets(updated);
+    localStorage.setItem('odoo_custom_presets', JSON.stringify(updated));
+
+    // Remove from deleted defaults if it was previously hidden
+    if (deletedDefaults.includes(selectedPresetName)) {
+      const updatedDeleted = deletedDefaults.filter((n) => n !== selectedPresetName);
+      setDeletedDefaults(updatedDeleted);
+      localStorage.setItem('odoo_deleted_defaults', JSON.stringify(updatedDeleted));
+    }
+
+    addToast({ type: 'success', message: `Preset "${selectedPresetName}" saved.` });
+  };
+
+  const handleDeletePreset = (presetName: string) => {
+    // Remove override
+    const updatedCustoms = customPresets.filter((p) => p.name !== presetName);
+    setCustomPresets(updatedCustoms);
+    localStorage.setItem('odoo_custom_presets', JSON.stringify(updatedCustoms));
+
+    // Mark default as deleted if it's a built-in default preset
+    if (defaultPresets.some((dp) => dp.name === presetName)) {
+      const updatedDeleted = [...deletedDefaults, presetName];
+      setDeletedDefaults(updatedDeleted);
+      localStorage.setItem('odoo_deleted_defaults', JSON.stringify(updatedDeleted));
+    }
+
+    if (selectedPresetName === presetName) {
+      setSelectedPresetName('');
+    }
+    addToast({ type: 'success', message: `Preset "${presetName}" deleted.` });
+  };
 
   // Dynamically build command string for preview
   const previewCmd = useMemo(() => {
+    if (activeTab === 'run' && runUseCustomCommand) {
+      return runCustomCommand || './odoo-bin';
+    }
+    if (activeTab === 'upgrade' && upUseCustomCommand) {
+      return upCustomCommand || './odoo-bin';
+    }
+    if (activeTab === 'test' && testUseCustomCommand) {
+      return testCustomCommand || './odoo-bin';
+    }
+
     let targetDb = '';
     let addons = '';
     let initModules: string[] = [];
@@ -335,7 +927,7 @@ export function OdooPanel() {
     let upgradePaths = '';
 
     if (activeTab === 'run') {
-      targetDb = runDbName || currentLinkedDb || '';
+      targetDb = runDbName;
       addons = runAddons;
       initModules = runInstallModules;
       updateModules = runUpdateModules;
@@ -345,14 +937,14 @@ export function OdooPanel() {
       customArgs = runCustomArgs;
       port = runPort;
     } else if (activeTab === 'upgrade') {
-      targetDb = upDbName || currentLinkedDb || '';
+      targetDb = upDbName;
       addons = upAddons;
       updateModules = upUpdateModules;
       stopAfterInit = upStopAfterInit;
       customArgs = upCustomArgs;
       upgradePaths = upUpgradePaths;
     } else if (activeTab === 'test') {
-      targetDb = testDbName || currentLinkedDb || '';
+      targetDb = testDbName;
       addons = testAddons;
       initModules = testModules;
       testTagsVal = testTags;
@@ -362,60 +954,59 @@ export function OdooPanel() {
     }
 
     const args: string[] = [];
-    if (dbUser) args.push(`--db_user=${dbUser}`);
-    if (dbHost) args.push(`--db_host=${dbHost}`);
-    if (dbPassword) args.push(`--db_password=${dbPassword}`);
-
-    const resolvedAddons = addons || 'addons,../enterprise';
-    args.push(`--addons-path=${resolvedAddons}`);
-
-    if (activeTab === 'run' || activeTab === 'test') {
-      args.push(`--http-port=${port}`);
-    }
-
-    if (activeTab === 'run' && devAll) {
-      args.push('--dev=all');
-    }
-
-    if (activeTab === 'run') {
-      if (withDemo === true) {
-        args.push('--with-demo');
-      } else if (withDemo === false) {
-        args.push('--without-demo');
-      }
-    }
-
     if (targetDb) {
-      args.push('-d');
-      args.push(targetDb);
+      args.push('-d', targetDb);
+    } else {
+      args.push('--no-database');
+    }
+
+    if (dbUser && dbUser !== 'odoo') {
+      args.push('--db_user', dbUser);
+    }
+    if (dbHost && dbHost !== '127.0.0.1') {
+      args.push('--db_host', dbHost);
+    }
+    if (dbPassword) {
+      args.push('--db_password', dbPassword);
+    }
+
+    if (addons) {
+      args.push('--addons-path', addons);
     }
 
     if (activeTab === 'run') {
+      if (port && port !== 8069) {
+        args.push('--http-port', port.toString());
+      }
       if (initModules.length > 0) {
-        args.push('-i');
-        args.push(initModules.join(','));
+        args.push('-i', initModules.join(','));
       }
       if (updateModules.length > 0) {
-        args.push('-u');
-        args.push(updateModules.join(','));
+        args.push('-u', updateModules.join(','));
+      }
+      if (devAll) {
+        args.push('--dev=all');
+      }
+      if (withDemo === false) {
+        args.push('--without-demo=all');
       }
     } else if (activeTab === 'upgrade') {
-      const resolvedUpgradePath = upgradePaths || '../upgrade-util/src,../upgrade/migrations';
-      args.push(`--upgrade-path=${resolvedUpgradePath}`);
+      if (upgradePaths) {
+        args.push('--upgrade-path', upgradePaths);
+      }
       if (updateModules.length > 0) {
-        args.push('-u');
-        args.push(updateModules.join(','));
-      } else {
-        args.push('-u all');
+        args.push('-u', updateModules.join(','));
       }
     } else if (activeTab === 'test') {
+      if (port) {
+        args.push('--http-port', port.toString());
+      }
       args.push('--test-enable');
       if (initModules.length > 0) {
-        args.push('-i');
-        args.push(initModules.join(','));
+        args.push('-i', initModules.join(','));
       }
       if (testTagsVal) {
-        args.push(`--test-tags=${testTagsVal}`);
+        args.push('--test-tags', testTagsVal);
       }
     }
 
@@ -440,10 +1031,20 @@ export function OdooPanel() {
   }, [
     activeTab,
     runDbName, runPort, runInterface, runAddons, runInstallModules, runUpdateModules, runDevAll, runWithDemo, runStopAfterInit, runCustomArgs,
+    runUseCustomCommand, runCustomCommand,
     upDbName, upUpgradePaths, upAddons, upUpdateModules, upRestoreTemplate, upTemplateDb, upStopAfterInit, upCustomArgs,
+    upUseCustomCommand, upCustomCommand,
     testAddons, testDbName, testModules, testTags, testPort, testStopAfterInit, testCustomArgs,
-    dbUser, dbHost, dbPassword, selectedVenv, currentLinkedDb
+    testUseCustomCommand, testCustomCommand,
+    dbUser, dbHost, dbPassword, selectedVenv, odooVersion
   ]);
+
+  const isCustomCommandActive = useMemo(() => {
+    if (activeTab === 'run') return runUseCustomCommand;
+    if (activeTab === 'upgrade') return upUseCustomCommand;
+    if (activeTab === 'test') return testUseCustomCommand;
+    return false;
+  }, [activeTab, runUseCustomCommand, upUseCustomCommand, testUseCustomCommand]);
 
   // Persist form states to localStorage
   useEffect(() => {
@@ -457,6 +1058,8 @@ export function OdooPanel() {
     localStorage.setItem('odoo_runWithDemo', runWithDemo.toString());
     localStorage.setItem('odoo_runStopAfterInit', runStopAfterInit.toString());
     localStorage.setItem('odoo_runCustomArgs', runCustomArgs);
+    localStorage.setItem('odoo_runUseCustomCommand', runUseCustomCommand.toString());
+    localStorage.setItem('odoo_runCustomCommand', runCustomCommand);
 
     localStorage.setItem('odoo_upDbName', upDbName);
     localStorage.setItem('odoo_upUpgradePaths', upUpgradePaths);
@@ -466,6 +1069,8 @@ export function OdooPanel() {
     localStorage.setItem('odoo_upTemplateDb', upTemplateDb);
     localStorage.setItem('odoo_upStopAfterInit', upStopAfterInit.toString());
     localStorage.setItem('odoo_upCustomArgs', upCustomArgs);
+    localStorage.setItem('odoo_upUseCustomCommand', upUseCustomCommand.toString());
+    localStorage.setItem('odoo_upCustomCommand', upCustomCommand);
 
     localStorage.setItem('odoo_testAddons', testAddons);
     localStorage.setItem('odoo_testDbName', testDbName);
@@ -474,10 +1079,15 @@ export function OdooPanel() {
     localStorage.setItem('odoo_testPort', testPort.toString());
     localStorage.setItem('odoo_testStopAfterInit', testStopAfterInit.toString());
     localStorage.setItem('odoo_testCustomArgs', testCustomArgs);
+    localStorage.setItem('odoo_testUseCustomCommand', testUseCustomCommand.toString());
+    localStorage.setItem('odoo_testCustomCommand', testCustomCommand);
   }, [
     runPort, runDbName, runInterface, runAddons, runInstallModules, runUpdateModules, runDevAll, runWithDemo, runStopAfterInit, runCustomArgs,
+    runUseCustomCommand, runCustomCommand,
     upDbName, upUpgradePaths, upAddons, upUpdateModules, upRestoreTemplate, upTemplateDb, upStopAfterInit, upCustomArgs,
-    testAddons, testDbName, testModules, testTags, testPort, testStopAfterInit, testCustomArgs
+    upUseCustomCommand, upCustomCommand,
+    testAddons, testDbName, testModules, testTags, testPort, testStopAfterInit, testCustomArgs,
+    testUseCustomCommand, testCustomCommand
   ]);
 
   // Fetch all modules for suggestions from all active repositories
@@ -548,8 +1158,7 @@ export function OdooPanel() {
 
   const loadSettings = async () => {
     try {
-      const dbMap = (await window.odoo.getStoreValue('branchDbMap')) || {};
-      setBranchDbMap(dbMap);
+
 
       const templateList = (await window.odoo.getStoreValue('odooTemplates')) || [];
       setTemplates(templateList);
@@ -600,31 +1209,7 @@ export function OdooPanel() {
   };
 
 
-  // Branch Linking Actions
-  const handleLinkDb = async (dbName: string) => {
-    if (!branchKey) return;
-    try {
-      const updated = { ...branchDbMap, [branchKey]: dbName };
-      await window.odoo.setStoreValue('branchDbMap', updated);
-      setBranchDbMap(updated);
-      addToast({ type: 'success', message: `Linked branch to database ${dbName}` });
-    } catch {
-      addToast({ type: 'error', message: 'Failed to link branch to database.' });
-    }
-  };
 
-  const handleUnlinkDb = async () => {
-    if (!branchKey) return;
-    try {
-      const updated = { ...branchDbMap };
-      delete updated[branchKey];
-      await window.odoo.setStoreValue('branchDbMap', updated);
-      setBranchDbMap(updated);
-      addToast({ type: 'success', message: 'Unlinked branch database.' });
-    } catch {
-      addToast({ type: 'error', message: 'Failed to unlink branch database.' });
-    }
-  };
 
   // Template toggle
   const handleToggleTemplate = async (dbName: string) => {
@@ -676,16 +1261,27 @@ export function OdooPanel() {
     }
   };
 
-  const handleDropDb = async (dbName: string) => {
-    if (confirm(`Are you absolutely sure you want to completely DROP database ${dbName}? This cannot be undone.`)) {
-      try {
-        await window.odoo.dropDb(dbName, dbUser, dbHost, dbPassword);
-        addToast({ type: 'success', message: `Database ${dbName} dropped.` });
-        refreshDbList(dbUser, dbHost, dbPassword, false);
-      } catch (err: any) {
-        addToast({ type: 'error', message: err.message || 'Failed to drop database.' });
-      }
+  const triggerDuplicate = (db: string) => {
+    setDupSrcDb(db);
+    setDupDestDb(`${db}_copy`);
+    setShowDuplicateModal(true);
+  };
+
+  const handleDropDb = (dbName: string) => {
+    setDropTargetDb(dbName);
+    setShowDropConfirmModal(true);
+  };
+
+  const confirmDropDb = async () => {
+    setShowDropConfirmModal(false);
+    try {
+      await window.odoo.dropDb(dropTargetDb, dbUser, dbHost, dbPassword);
+      addToast({ type: 'success', message: `Database ${dropTargetDb} dropped.` });
+      refreshDbList(dbUser, dbHost, dbPassword, false);
+    } catch (err: any) {
+      addToast({ type: 'error', message: err.message || 'Failed to drop database.' });
     }
+    setDropTargetDb('');
   };
 
   // Venv Handlers
@@ -730,11 +1326,11 @@ export function OdooPanel() {
 
     let targetDb = '';
     if (activeTab === 'run') {
-      targetDb = runDbName || currentLinkedDb || '';
+      targetDb = runDbName;
     } else if (activeTab === 'upgrade') {
-      targetDb = upDbName || currentLinkedDb || '';
+      targetDb = upDbName;
     } else if (activeTab === 'test') {
-      targetDb = testDbName || currentLinkedDb || '';
+      targetDb = testDbName;
     }
 
     // Handle template restoration prior to running upgrade
@@ -763,6 +1359,7 @@ export function OdooPanel() {
         dbUser: dbUser,
         dbHost: dbHost,
         dbPassword: dbPassword,
+        odooVersion: odooVersion,
       };
 
       if (activeTab === 'run') {
@@ -778,6 +1375,8 @@ export function OdooPanel() {
           withDemo: runWithDemo,
           stopAfterInit: runStopAfterInit,
           customArgs: runCustomArgs,
+          useCustomCommand: runUseCustomCommand,
+          customCommand: runCustomCommand || undefined,
         };
       } else if (activeTab === 'upgrade') {
         opts = {
@@ -788,6 +1387,8 @@ export function OdooPanel() {
           updateModules: upUpdateModules.length > 0 ? upUpdateModules.join(',') : undefined,
           stopAfterInit: upStopAfterInit,
           customArgs: upCustomArgs,
+          useCustomCommand: upUseCustomCommand,
+          customCommand: upCustomCommand || undefined,
         };
       } else if (activeTab === 'test') {
         opts = {
@@ -799,6 +1400,8 @@ export function OdooPanel() {
           port: testPort,
           stopAfterInit: testStopAfterInit,
           customArgs: testCustomArgs,
+          useCustomCommand: testUseCustomCommand,
+          customCommand: testCustomCommand || undefined,
         };
       }
 
@@ -824,11 +1427,11 @@ export function OdooPanel() {
 
     let targetDb = '';
     if (activeTab === 'run') {
-      targetDb = runDbName || currentLinkedDb || '';
+      targetDb = runDbName;
     } else if (activeTab === 'upgrade') {
-      targetDb = upDbName || currentLinkedDb || '';
+      targetDb = upDbName;
     } else if (activeTab === 'test') {
-      targetDb = testDbName || currentLinkedDb || '';
+      targetDb = testDbName;
     }
 
     let opts: any = {
@@ -838,6 +1441,7 @@ export function OdooPanel() {
       dbUser: dbUser,
       dbHost: dbHost,
       dbPassword: dbPassword,
+      odooVersion: odooVersion,
     };
 
     if (activeTab === 'run') {
@@ -853,6 +1457,8 @@ export function OdooPanel() {
         withDemo: runWithDemo,
         stopAfterInit: runStopAfterInit,
         customArgs: runCustomArgs,
+        useCustomCommand: runUseCustomCommand,
+        customCommand: runCustomCommand || undefined,
       };
     } else if (activeTab === 'upgrade') {
       opts = {
@@ -863,6 +1469,8 @@ export function OdooPanel() {
         updateModules: upUpdateModules.length > 0 ? upUpdateModules.join(',') : undefined,
         stopAfterInit: upStopAfterInit,
         customArgs: upCustomArgs,
+        useCustomCommand: upUseCustomCommand,
+        customCommand: upCustomCommand || undefined,
       };
     } else if (activeTab === 'test') {
       opts = {
@@ -874,6 +1482,8 @@ export function OdooPanel() {
         port: testPort,
         stopAfterInit: testStopAfterInit,
         customArgs: testCustomArgs,
+        useCustomCommand: testUseCustomCommand,
+        customCommand: testCustomCommand || undefined,
       };
     }
 
@@ -889,19 +1499,11 @@ export function OdooPanel() {
     }
   };
 
-  const handleQuickRun = (dbName: string) => {
-    handleLinkDb(dbName);
-    setActiveTab('run');
-  };
+
 
   const venvOptions = [
     { value: '', label: 'System Default Python' },
     ...venvs.map((v) => ({ value: v, label: v })),
-  ];
-
-  const dbOptions = [
-    { value: '', label: `[Linked Database: ${currentLinkedDb || 'None'}]` },
-    ...dbs.map((db) => ({ value: db, label: db })),
   ];
 
   const templateOptions = [
@@ -913,8 +1515,6 @@ export function OdooPanel() {
     { value: '', label: '-- Fresh Empty DB --' },
     ...dbs.map((db) => ({ value: db, label: db })),
   ];
-
-  const filteredDbs = dbs.filter((db) => db.toLowerCase().includes(dbFilter.toLowerCase()));
 
   return (
     <div className="flex flex-col h-full bg-bg select-none">
@@ -968,221 +1568,163 @@ export function OdooPanel() {
 
       {/* Main Split Section */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Side: Postgres DB List */}
-        <div className="w-[45%] flex flex-col border-r border-border h-full bg-surface/10">
-          <div className="p-3 border-b border-border space-y-2 bg-surface/20 shrink-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="font-semibold text-muted text-[11px] uppercase tracking-wider">
-                  Databases ({filteredDbs.length})
-                </span>
-                <span className={`w-1.5 h-1.5 rounded-full ${isDbConnected ? 'bg-success' : 'bg-muted'}`} title={isDbConnected ? 'Connected' : 'Disconnected'} />
+        {/* Left Side: Command Preview and Server Logs Terminal */}
+        <div className="w-[45%] flex flex-col border-r border-border h-full bg-surface/10 overflow-hidden">
+          {/* Command Preview bar */}
+          <div className="px-4 py-3 border-b border-border bg-surface/20 shrink-0">
+            <div className="space-y-1.5">
+              <div className="text-[10px] text-muted font-bold uppercase tracking-wider">
+                {serverStatus !== 'stopped' ? 'Running Command' : 'Command Preview'}
               </div>
-              <button
-                className={`p-1 hover:bg-border/60 text-muted hover:text-primary rounded ${
-                  loadingDbs ? 'opacity-50 pointer-events-none' : ''
-                }`}
-                onClick={() => refreshDbList(dbUser, dbHost, dbPassword, true)}
-                title="Refresh Database list"
-              >
-                <svg
-                  className={`w-3.5 h-3.5 ${loadingDbs ? 'spinner text-accent' : ''}`}
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89L13.5 5.5M13.5 2.5v3h-3" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="flex gap-2 relative">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  placeholder="Filter databases..."
-                  className="w-full bg-bg text-[11.5px] py-1 px-2.5 border border-border rounded outline-none focus:border-accent pr-6"
-                  value={dbFilter}
-                  onChange={(e) => setDbFilter(e.target.value)}
-                />
-                {dbFilter && (
-                  <button
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-primary text-[14px]"
-                    onClick={() => setDbFilter('')}
-                  >
-                    ×
-                  </button>
-                )}
+              <div className="text-[10px] font-mono text-primary/80 whitespace-pre-wrap break-all border border-border/40 p-2 rounded bg-bg/50 select-all hover:text-primary transition-colors" title={serverStatus !== 'stopped' ? runningCmd : previewCmd}>
+                {serverStatus !== 'stopped' ? runningCmd : previewCmd}
               </div>
-              <button
-                className="px-2.5 py-1 bg-accent border border-accent hover:bg-accent/80 text-[10.5px] text-white font-semibold rounded transition-colors shrink-0 flex items-center justify-center gap-1"
-                onClick={() => setShowCreateModal(true)}
-              >
-                + New DB
-              </button>
             </div>
           </div>
 
-          {/* Database Grid list */}
-          <div className="flex-1 overflow-y-auto divide-y divide-border/40 p-2 space-y-1.5">
-            {loadingDbs ? (
-              <div className="flex flex-col items-center justify-center py-16 text-muted text-[12px] gap-2">
-                <svg className="spinner text-accent animate-spin" width="16" height="16" viewBox="0 0 14 14" fill="none">
-                  <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="20 12" />
-                </svg>
-                Loading databases...
+          {/* Live Terminal Output Console */}
+          <div className="flex-1 flex flex-col bg-slate-950 font-mono text-[11px] text-slate-200 overflow-hidden">
+            <div className="px-3 py-2 bg-slate-900 border-b border-border/40 flex items-center justify-between shrink-0">
+              <span className="text-slate-400 font-bold uppercase text-[9px]">Server Logs Terminal</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleOpenExternalTerminal}
+                  className="text-slate-400 hover:text-white text-[9px] transition-colors flex items-center gap-1 border border-slate-700/60 rounded px-1.5 py-0.5 bg-slate-800/40 hover:bg-slate-800"
+                  title="Open command in external Ubuntu terminal"
+                >
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                  </svg>
+                  <span>Open in terminal</span>
+                </button>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(logs.join(''));
+                    addToast({ type: 'info', message: 'Logs copied to clipboard.' });
+                  }}
+                  className="text-slate-400 hover:text-white text-[9px] transition-colors"
+                >
+                  Copy
+                </button>
+                <button
+                  onClick={() => setLogs([])}
+                  className="text-slate-400 hover:text-white text-[9px] transition-colors"
+                >
+                  Clear
+                </button>
               </div>
-            ) : !isDbConnected ? (
-              <div className="flex flex-col items-center justify-center p-6 text-center bg-surface/10 border border-dashed border-border rounded-lg m-2">
-                <svg className="w-8 h-8 text-muted mb-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 00-2 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-                <h4 className="text-[13px] font-medium text-primary mb-1">PostgreSQL Disconnected</h4>
-                <p className="text-[11px] text-muted max-w-[240px] leading-relaxed">
-                  Please enter your credentials and click Connect in the PostgreSQL Connection card above.
-                </p>
-              </div>
-            ) : filteredDbs.length === 0 ? (
-              <div className="p-8 text-center text-muted text-[12px] italic">No databases found.</div>
-            ) : (
-              filteredDbs.map((db) => {
-                const isTemplate = templates.includes(db);
-                const isLinked = currentLinkedDb === db;
-                return (
-                  <div
-                    key={db}
-                    className={`group p-2.5 rounded-lg border transition-all flex items-center justify-between bg-surface/30 cursor-pointer ${
-                      isLinked
-                        ? 'border-success/30 bg-success/5 shadow-inner'
-                        : 'border-border/60 hover:border-border hover:bg-surface/50'
-                    }`}
-                    onClick={() => isLinked ? handleUnlinkDb() : handleLinkDb(db)}
-                  >
-                    <div className="flex flex-col min-w-0 pr-2">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[12px] font-semibold text-primary truncate">{db}</span>
-                        {isLinked && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-success/20 text-success uppercase tracking-wide">
-                            Linked
-                          </span>
-                        )}
-                        {isTemplate && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-warning/20 text-warning uppercase tracking-wide flex items-center gap-0.5">
-                            <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
-                              <path d="M12 .587l3.668 7.431 8.2 1.192-5.934 5.787 1.4 8.168L12 18.896l-7.334 3.857 1.4-8.168L.133 9.21l8.2-1.192z" />
-                            </svg>
-                            Template
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* DB Action options */}
-                    <div className="flex items-center gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity shrink-0">
-                      <button
-                        className="p-1.5 rounded hover:bg-border/60 text-muted hover:text-warning"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleTemplate(db);
-                        }}
-                        title={isTemplate ? 'Unmark template' : 'Mark as Template'}
-                      >
-                        <svg className="w-4 h-4" fill={isTemplate ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                        </svg>
-                      </button>
-                      <button
-                        className="p-1.5 rounded hover:bg-border/60 text-muted hover:text-primary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDupSrcDb(db);
-                          setDupDestDb(`${db}_copy`);
-                          setShowDuplicateModal(true);
-                        }}
-                        title="Duplicate Database"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-                        </svg>
-                      </button>
-                      <button
-                        className="p-1.5 rounded hover:bg-border/60 text-muted hover:text-success"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleQuickRun(db);
-                        }}
-                        title="Run Server with this DB"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </button>
-                      <button
-                        className="p-1.5 rounded hover:bg-border/60 text-muted hover:text-danger"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDropDb(db);
-                        }}
-                        title="Drop Database"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
+            </div>
+            <div className="flex-1 overflow-auto p-2.5 selection:bg-slate-700 select-text leading-tight whitespace-pre-wrap">
+              {logs.length === 0 ? (
+                <div className="text-slate-500 italic py-4 text-center">No terminal logs recorded yet. Start server to stream output.</div>
+              ) : (
+                logs.map((log, idx) => <div key={idx}>{log}</div>)
+              )}
+              <div ref={terminalEndRef} />
+            </div>
           </div>
         </div>
 
         {/* Right Side: Virtual Environment + Server controls & Console */}
         <div className="w-[55%] flex flex-col h-full overflow-hidden bg-bg">
-          {/* Virtual Environment Selector */}
-          <div className="p-3 border-b border-border bg-surface/20 flex flex-col gap-2 shrink-0">
-            <span className="font-semibold text-muted text-[11px] uppercase tracking-wider">
-              Python Virtual Environment (venv)
-            </span>
-            <div className="flex items-center gap-2 w-full">
-              <div className="flex items-center gap-1.5 flex-[1.2] min-w-[200px]">
+          {/* Virtual Environment Selector & Preset Manager */}
+          <div className="p-3 border-b border-border bg-surface/20 flex flex-col gap-3 shrink-0">
+            {/* Presets section — comes first */}
+            <div className="flex flex-col gap-1.5">
+              <span className="font-semibold text-muted text-[10px] uppercase tracking-wider">
+                Configuration Preset
+              </span>
+              <div className="flex items-center gap-2 h-[36px]">
                 <Dropdown
-                  options={venvOptions}
-                  value={selectedVenv}
-                  onChange={handleSelectVenv}
-                  searchable={true}
-                  placeholder="System Default Python"
+                  options={filteredPresets.map((p) => ({ value: p.name, label: p.name }))}
+                  value={selectedPresetName}
+                  onChange={handleApplyPreset}
+                  placeholder="Select Preset..."
                   className="flex-1"
                 />
-                {selectedVenv && (
-                  <button
-                    onClick={() => handleRemoveVenv(selectedVenv)}
-                    className="px-2 py-1 text-danger bg-danger/10 border border-danger/20 hover:bg-danger/25 text-[11px] font-medium rounded transition-colors shrink-0"
-                    title="Remove selected path from list"
-                  >
-                    Remove
-                  </button>
+                {selectedPresetName && (
+                  <>
+                    <button
+                      onClick={handleUpdateCurrentPreset}
+                      className="w-[36px] shrink-0 h-full flex items-center justify-center bg-success/15 border border-success/30 hover:bg-success/25 text-success rounded transition-colors"
+                      title="Save — update preset with current config"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => handleDeletePreset(selectedPresetName)}
+                      className="w-[36px] shrink-0 h-full flex items-center justify-center bg-danger/15 border border-danger/30 hover:bg-danger/25 text-danger rounded transition-colors"
+                      title="Delete preset"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </>
                 )}
-              </div>
-
-              <div className="flex items-center gap-1.5 flex-[2] min-w-[280px]">
-                <input
-                  type="text"
-                  placeholder="Paste absolute path to venv folder (e.g. /home/user/venv/)"
-                  value={newVenvPath}
-                  onChange={(e) => setNewVenvPath(e.target.value)}
-                  className="bg-bg text-[11px] py-1 px-2 border border-border rounded outline-none focus:border-accent flex-1 text-primary min-w-0"
-                />
                 <button
-                  onClick={handleAddVenv}
-                  className="px-2.5 py-1 bg-accent border border-accent hover:bg-accent/80 text-[11px] text-white font-semibold rounded transition-colors shrink-0"
+                  onClick={() => setShowSavePresetModal(true)}
+                  className="w-[36px] shrink-0 h-full flex items-center justify-center bg-accent/15 border border-accent/30 hover:bg-accent/25 text-accent rounded transition-colors"
+                  title="New preset — save current config as new preset"
                 >
-                  Add Path
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+                  </svg>
                 </button>
+              </div>
+            </div>
+
+            {/* Venv Row — below preset */}
+            <div className={`flex flex-col gap-1.5 border-t border-border/40 pt-2.5 ${isCustomCommandActive ? 'opacity-50 pointer-events-none' : ''}`}>
+              <span className="font-semibold text-muted text-[11px] uppercase tracking-wider">
+                Python Virtual Environment (venv)
+              </span>
+              <div className="flex items-stretch gap-2 w-full h-[36px]">
+                <div className="flex items-stretch gap-1.5 flex-[1.2] min-w-[200px]">
+                  <Dropdown
+                    options={venvOptions}
+                    value={selectedVenv}
+                    onChange={handleSelectVenv}
+                    searchable={true}
+                    placeholder="System Default Python"
+                    className="flex-1"
+                    disabled={isCustomCommandActive}
+                  />
+                  {selectedVenv && !isCustomCommandActive && (
+                    <button
+                      onClick={() => handleRemoveVenv(selectedVenv)}
+                      className="w-[36px] shrink-0 h-full flex items-center justify-center text-danger bg-danger/10 border border-danger/20 hover:bg-danger/25 rounded transition-colors"
+                      title="Remove selected venv from list"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-stretch gap-1.5 flex-[2] min-w-[280px]">
+                  <input
+                    type="text"
+                    disabled={isCustomCommandActive}
+                    placeholder="Paste absolute path to venv folder (e.g. /home/user/venv/)"
+                    value={newVenvPath}
+                    onChange={(e) => setNewVenvPath(e.target.value)}
+                    className="bg-bg text-[11px] px-2 border border-border rounded outline-none focus:border-accent flex-1 text-primary min-w-0 h-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <button
+                    onClick={handleAddVenv}
+                    disabled={isCustomCommandActive}
+                    className="w-[36px] shrink-0 h-full flex items-center justify-center bg-accent border border-accent hover:bg-accent/80 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Add venv path"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1222,21 +1764,31 @@ export function OdooPanel() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] text-muted font-bold uppercase mb-1">Target DB</label>
-                    <Dropdown
-                      options={dbOptions}
+                    <DbDropdown
                       value={runDbName}
                       onChange={setRunDbName}
-                      searchable={true}
-                      placeholder={`[Linked Database: ${currentLinkedDb || 'None'}]`}
+                      dbs={dbs}
+                      templates={templates}
+                      loadingDbs={loadingDbs}
+                      onToggleTemplate={handleToggleTemplate}
+                      onDuplicate={triggerDuplicate}
+                      onDrop={handleDropDb}
+                      onRefresh={() => refreshDbList(dbUser, dbHost, dbPassword, true)}
+                      onCreateNew={() => {
+                        setCreateTemplateSource('');
+                        setShowCreateModal(true);
+                      }}
+                      disabled={runUseCustomCommand}
                     />
                   </div>
                   <div>
                     <label className="block text-[10px] text-muted font-bold uppercase mb-1">HTTP Port</label>
                     <input
                       type="number"
+                      disabled={runUseCustomCommand}
                       value={runPort}
                       onChange={(e) => setRunPort(parseInt(e.target.value) || 8069)}
-                      className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-3 border border-border rounded outline-none text-primary min-h-[36px] focus:border-accent/70"
+                      className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-3 border border-border rounded outline-none text-primary min-h-[36px] focus:border-accent/70 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -1246,18 +1798,20 @@ export function OdooPanel() {
                     <label className="block text-[10px] text-muted font-bold uppercase mb-1">HTTP Interface</label>
                     <input
                       type="text"
+                      disabled={runUseCustomCommand}
                       value={runInterface}
                       onChange={(e) => setRunInterface(e.target.value)}
-                      className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-3 border border-border rounded outline-none text-primary min-h-[36px] focus:border-accent/70"
+                      className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-3 border border-border rounded outline-none text-primary min-h-[36px] focus:border-accent/70 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                   <div>
                     <label className="block text-[10px] text-muted font-bold uppercase mb-1">Addons Path</label>
                     <input
                       type="text"
+                      disabled={runUseCustomCommand}
                       value={runAddons}
                       onChange={(e) => setRunAddons(e.target.value)}
-                      className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-3 border border-border rounded outline-none font-mono text-primary min-h-[36px] focus:border-accent/70"
+                      className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-3 border border-border rounded outline-none font-mono text-primary min-h-[36px] focus:border-accent/70 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -1269,6 +1823,7 @@ export function OdooPanel() {
                     onChange={setRunInstallModules}
                     allModules={allModules}
                     placeholder="e.g. sale, purchase"
+                    disabled={runUseCustomCommand}
                   />
                   <ModuleSelector
                     label="Update Module (-u)"
@@ -1276,34 +1831,38 @@ export function OdooPanel() {
                     onChange={setRunUpdateModules}
                     allModules={allModules}
                     placeholder="e.g. sale, purchase"
+                    disabled={runUseCustomCommand}
                   />
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 py-1.5">
-                  <label className="flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none">
+                  <label className={`flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none ${runUseCustomCommand ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}>
                     <input
                       type="checkbox"
+                      disabled={runUseCustomCommand}
                       checked={runDevAll}
                       onChange={(e) => setRunDevAll(e.target.checked)}
-                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg"
+                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     --dev=all
                   </label>
-                  <label className="flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none" title="Loads demo data in Odoo 19+. Disables demo load on older versions when unchecked.">
+                  <label className={`flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none ${runUseCustomCommand ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`} title="Loads demo data in Odoo 19+. Disables demo load on older versions when unchecked.">
                     <input
                       type="checkbox"
+                      disabled={runUseCustomCommand}
                       checked={runWithDemo}
                       onChange={(e) => setRunWithDemo(e.target.checked)}
-                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg"
+                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     With Demo Data
                   </label>
-                  <label className="flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none">
+                  <label className={`flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none ${runUseCustomCommand ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}>
                     <input
                       type="checkbox"
+                      disabled={runUseCustomCommand}
                       checked={runStopAfterInit}
                       onChange={(e) => setRunStopAfterInit(e.target.checked)}
-                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg"
+                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     Stop after init
                   </label>
@@ -1313,11 +1872,37 @@ export function OdooPanel() {
                   <label className="block text-[10px] text-muted font-bold uppercase mb-1">Custom Raw Arguments</label>
                   <input
                     type="text"
+                    disabled={runUseCustomCommand}
                     placeholder="e.g. --log-level=debug --workers=0"
                     value={runCustomArgs}
                     onChange={(e) => setRunCustomArgs(e.target.value)}
-                    className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary"
+                    className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+                </div>
+
+                {/* Custom Command Override Section */}
+                <div className="border-t border-border/40 pt-3 mt-1 space-y-2">
+                  <label className="flex items-center gap-2 text-[11px] font-semibold text-accent cursor-pointer select-none w-full bg-accent/5 hover:bg-accent/10 border border-accent/20 rounded-md p-2.5 transition-all duration-150 shadow-sm">
+                    <input
+                      type="checkbox"
+                      checked={runUseCustomCommand}
+                      onChange={(e) => setRunUseCustomCommand(e.target.checked)}
+                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg"
+                    />
+                    Use Custom Command
+                  </label>
+                  {runUseCustomCommand && (
+                    <div>
+                      <label className="block text-[10px] text-accent font-bold uppercase mb-1">Custom Command String</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. /home/odoo/venv/bin/python ./odoo-bin -d master-db"
+                        value={runCustomCommand}
+                        onChange={(e) => setRunCustomCommand(e.target.value)}
+                        className="w-full bg-bg text-[12px] py-1.5 px-3 border border-accent/40 focus:border-accent rounded outline-none font-mono text-primary"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1327,21 +1912,31 @@ export function OdooPanel() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] text-muted font-bold uppercase mb-1">Target DB</label>
-                    <Dropdown
-                      options={dbOptions}
+                    <DbDropdown
                       value={upDbName}
                       onChange={setUpDbName}
-                      searchable={true}
-                      placeholder={`[Linked Database: ${currentLinkedDb || 'None'}]`}
+                      dbs={dbs}
+                      templates={templates}
+                      loadingDbs={loadingDbs}
+                      onToggleTemplate={handleToggleTemplate}
+                      onDuplicate={triggerDuplicate}
+                      onDrop={handleDropDb}
+                      onRefresh={() => refreshDbList(dbUser, dbHost, dbPassword, true)}
+                      onCreateNew={() => {
+                        setCreateTemplateSource('');
+                        setShowCreateModal(true);
+                      }}
+                      disabled={upUseCustomCommand}
                     />
                   </div>
                   <div>
                     <label className="block text-[10px] text-muted font-bold uppercase mb-1">Upgrade Paths</label>
                     <input
                       type="text"
+                      disabled={upUseCustomCommand}
                       value={upUpgradePaths}
                       onChange={(e) => setUpUpgradePaths(e.target.value)}
-                      className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary"
+                      className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -1350,9 +1945,10 @@ export function OdooPanel() {
                   <label className="block text-[10px] text-muted font-bold uppercase mb-1">Addons Path</label>
                   <input
                     type="text"
+                    disabled={upUseCustomCommand}
                     value={upAddons}
                     onChange={(e) => setUpAddons(e.target.value)}
-                    className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary"
+                    className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -1362,15 +1958,17 @@ export function OdooPanel() {
                   onChange={setUpUpdateModules}
                   allModules={allModules}
                   placeholder="e.g. sale, purchase (leave empty to upgrade all)"
+                  disabled={upUseCustomCommand}
                 />
 
-                <div className="border border-warning/20 bg-warning/5 rounded p-3 space-y-2.5">
+                <div className={`border border-warning/20 bg-warning/5 rounded p-3 space-y-2.5 ${upUseCustomCommand ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}>
                   <label className="flex items-center gap-1.5 text-[11px] font-semibold text-warning cursor-pointer select-none">
                     <input
                       type="checkbox"
+                      disabled={upUseCustomCommand}
                       checked={upRestoreTemplate}
                       onChange={(e) => setUpRestoreTemplate(e.target.checked)}
-                      className="rounded border-border text-warning cursor-pointer focus:ring-warning bg-bg"
+                      className="rounded border-border text-warning cursor-pointer focus:ring-warning bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     Restore DB from template before upgrade
                   </label>
@@ -1383,18 +1981,20 @@ export function OdooPanel() {
                         onChange={setUpTemplateDb}
                         searchable={true}
                         placeholder="-- Choose Template --"
+                        disabled={upUseCustomCommand}
                       />
                     </div>
                   )}
                 </div>
 
                 <div className="flex items-center gap-4 py-1">
-                  <label className="flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none">
+                  <label className={`flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none ${upUseCustomCommand ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}>
                     <input
                       type="checkbox"
+                      disabled={upUseCustomCommand}
                       checked={upStopAfterInit}
                       onChange={(e) => setUpStopAfterInit(e.target.checked)}
-                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg"
+                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     --stop-after-init
                   </label>
@@ -1404,11 +2004,37 @@ export function OdooPanel() {
                   <label className="block text-[10px] text-muted font-bold uppercase mb-1">Custom Raw Arguments</label>
                   <input
                     type="text"
+                    disabled={upUseCustomCommand}
                     placeholder="e.g. --log-level=info"
                     value={upCustomArgs}
                     onChange={(e) => setUpCustomArgs(e.target.value)}
-                    className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary"
+                    className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+                </div>
+
+                {/* Custom Command Override Section */}
+                <div className="border-t border-border/40 pt-3 mt-1 space-y-2">
+                  <label className="flex items-center gap-2 text-[11px] font-semibold text-accent cursor-pointer select-none w-full bg-accent/5 hover:bg-accent/10 border border-accent/20 rounded-md p-2.5 transition-all duration-150 shadow-sm">
+                    <input
+                      type="checkbox"
+                      checked={upUseCustomCommand}
+                      onChange={(e) => setUpUseCustomCommand(e.target.checked)}
+                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg"
+                    />
+                    Use Custom Command
+                  </label>
+                  {upUseCustomCommand && (
+                    <div>
+                      <label className="block text-[10px] text-accent font-bold uppercase mb-1">Custom Command String</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. /home/odoo/venv/bin/python ./odoo-bin -d master-db"
+                        value={upCustomCommand}
+                        onChange={(e) => setUpCustomCommand(e.target.value)}
+                        className="w-full bg-bg text-[12px] py-1.5 px-3 border border-accent/40 focus:border-accent rounded outline-none font-mono text-primary"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1418,21 +2044,31 @@ export function OdooPanel() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10px] text-muted font-bold uppercase mb-1">Target DB</label>
-                    <Dropdown
-                      options={dbOptions}
+                    <DbDropdown
                       value={testDbName}
                       onChange={setTestDbName}
-                      searchable={true}
-                      placeholder={`[Linked Database: ${currentLinkedDb || 'None'}]`}
+                      dbs={dbs}
+                      templates={templates}
+                      loadingDbs={loadingDbs}
+                      onToggleTemplate={handleToggleTemplate}
+                      onDuplicate={triggerDuplicate}
+                      onDrop={handleDropDb}
+                      onRefresh={() => refreshDbList(dbUser, dbHost, dbPassword, true)}
+                      onCreateNew={() => {
+                        setCreateTemplateSource('');
+                        setShowCreateModal(true);
+                      }}
+                      disabled={testUseCustomCommand}
                     />
                   </div>
                   <div>
                     <label className="block text-[10px] text-muted font-bold uppercase mb-1">HTTP Port (0 = Auto)</label>
                     <input
                       type="number"
+                      disabled={testUseCustomCommand}
                       value={testPort}
                       onChange={(e) => setTestPort(parseInt(e.target.value) || 0)}
-                      className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none text-primary"
+                      className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none text-primary disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -1444,15 +2080,17 @@ export function OdooPanel() {
                     onChange={setTestModules}
                     allModules={allModules}
                     placeholder="e.g. account_reports"
+                    disabled={testUseCustomCommand}
                   />
                   <div>
                     <label className="block text-[10px] text-muted font-bold uppercase mb-1">Test Tags</label>
                     <input
                       type="text"
+                      disabled={testUseCustomCommand}
                       placeholder="e.g. account_reports"
                       value={testTags}
                       onChange={(e) => setTestTags(e.target.value)}
-                      className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-2 border border-border rounded outline-none text-primary min-h-[34px] focus:border-accent/70 font-mono"
+                      className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-2 border border-border rounded outline-none text-primary min-h-[34px] focus:border-accent/70 font-mono disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -1461,19 +2099,21 @@ export function OdooPanel() {
                   <label className="block text-[10px] text-muted font-bold uppercase mb-1">Addons Path</label>
                   <input
                     type="text"
+                    disabled={testUseCustomCommand}
                     value={testAddons}
                     onChange={(e) => setTestAddons(e.target.value)}
-                    className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary"
+                    className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
 
                 <div className="flex items-center gap-4 py-1">
-                  <label className="flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none">
+                  <label className={`flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none ${testUseCustomCommand ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}>
                     <input
                       type="checkbox"
+                      disabled={testUseCustomCommand}
                       checked={testStopAfterInit}
                       onChange={(e) => setTestStopAfterInit(e.target.checked)}
-                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg"
+                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     --stop-after-init
                   </label>
@@ -1483,69 +2123,42 @@ export function OdooPanel() {
                   <label className="block text-[10px] text-muted font-bold uppercase mb-1">Custom Raw Arguments</label>
                   <input
                     type="text"
+                    disabled={testUseCustomCommand}
                     placeholder="e.g. --log-level=test"
                     value={testCustomArgs}
                     onChange={(e) => setTestCustomArgs(e.target.value)}
-                    className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary"
+                    className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+                </div>
+
+                {/* Custom Command Override Section */}
+                <div className="border-t border-border/40 pt-3 mt-1 space-y-2">
+                  <label className="flex items-center gap-2 text-[11px] font-semibold text-accent cursor-pointer select-none w-full bg-accent/5 hover:bg-accent/10 border border-accent/20 rounded-md p-2.5 transition-all duration-150 shadow-sm">
+                    <input
+                      type="checkbox"
+                      checked={testUseCustomCommand}
+                      onChange={(e) => setTestUseCustomCommand(e.target.checked)}
+                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg"
+                    />
+                    Use Custom Command
+                  </label>
+                  {testUseCustomCommand && (
+                    <div>
+                      <label className="block text-[10px] text-accent font-bold uppercase mb-1">Custom Command String</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. /home/odoo/venv/bin/python ./odoo-bin -d master-db"
+                        value={testCustomCommand}
+                        onChange={(e) => setTestCustomCommand(e.target.value)}
+                        className="w-full bg-bg text-[12px] py-1.5 px-3 border border-accent/40 focus:border-accent rounded outline-none font-mono text-primary"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Command Preview bar */}
-          <div className="px-4 py-2.5 border-t border-border bg-surface/20 shrink-0">
-            <div className="space-y-1">
-              <div className="text-[9px] text-muted font-bold uppercase tracking-wider">
-                {serverStatus !== 'stopped' ? 'Running Command' : 'Command Preview'}
-              </div>
-              <div className="text-[9.5px] font-mono text-primary/80 whitespace-pre-wrap break-all border border-border/40 p-1.5 rounded bg-bg/50 select-all hover:text-primary transition-colors" title={serverStatus !== 'stopped' ? runningCmd : previewCmd}>
-                {serverStatus !== 'stopped' ? runningCmd : previewCmd}
-              </div>
-            </div>
-          </div>
-
-          {/* Live Terminal Output Console */}
-          <div className="h-44 border-t border-border flex flex-col bg-slate-950 font-mono text-[11px] text-slate-200 shrink-0">
-            <div className="px-3 py-1 bg-slate-900 border-b border-border/40 flex items-center justify-between shrink-0">
-              <span className="text-slate-400 font-bold uppercase text-[9px]">Server Logs Terminal</span>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleOpenExternalTerminal}
-                  className="text-slate-400 hover:text-white text-[9px] transition-colors flex items-center gap-1 border border-slate-700/60 rounded px-1.5 py-0.5 bg-slate-800/40 hover:bg-slate-800"
-                  title="Open command in external Ubuntu terminal"
-                >
-                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                  </svg>
-                  <span>Open Terminal</span>
-                </button>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(logs.join(''));
-                    addToast({ type: 'info', message: 'Logs copied to clipboard.' });
-                  }}
-                  className="text-slate-400 hover:text-white text-[9px] transition-colors"
-                >
-                  Copy
-                </button>
-                <button
-                  onClick={() => setLogs([])}
-                  className="text-slate-400 hover:text-white text-[9px] transition-colors"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-auto p-2 selection:bg-slate-700 select-text leading-tight whitespace-pre-wrap">
-              {logs.length === 0 ? (
-                <div className="text-slate-500 italic py-4 text-center">No terminal logs recorded yet. Start server to stream output.</div>
-              ) : (
-                logs.map((log, idx) => <div key={idx}>{log}</div>)
-              )}
-              <div ref={terminalEndRef} />
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1558,11 +2171,13 @@ export function OdooPanel() {
               <div>
                 <label className="block text-[10px] text-muted font-bold uppercase mb-1">Database Name</label>
                 <input
+                  ref={createDbInputRef}
                   type="text"
                   placeholder="e.g. odoo_dev_db"
                   value={createDbName}
                   onChange={(e) => setCreateDbName(e.target.value)}
                   className="w-full bg-bg text-[12px] py-1.5 px-3 border border-border rounded-md outline-none text-primary"
+                  autoFocus
                 />
               </div>
               <div>
@@ -1604,11 +2219,13 @@ export function OdooPanel() {
             <div>
               <label className="block text-[10px] text-muted font-bold uppercase mb-1">New Database Name</label>
               <input
+                ref={duplicateDbInputRef}
                 type="text"
                 placeholder="e.g. odoo_dev_db_copy"
                 value={dupDestDb}
                 onChange={(e) => setDupDestDb(e.target.value)}
                 className="w-full bg-bg text-[12px] py-1.5 px-3 border border-border rounded-md outline-none text-primary"
+                autoFocus
               />
             </div>
 
@@ -1625,6 +2242,87 @@ export function OdooPanel() {
                 disabled={!dupDestDb.trim()}
               >
                 Clone DB
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save Preset Dialog Modal */}
+      {showSavePresetModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in p-4">
+          <div className="bg-surface border border-border rounded-xl w-full max-w-sm p-4 space-y-4 shadow-2xl">
+            <h3 className="text-[14px] font-bold text-primary">Save Configuration Preset</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] text-muted font-bold uppercase mb-1">Preset Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Odoo 17 Project Setup"
+                  value={newPresetName}
+                  onChange={(e) => setNewPresetName(e.target.value)}
+                  className="w-full bg-bg text-[12px] py-1.5 px-3 border border-border rounded-md outline-none text-primary"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSavePreset();
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                className="px-3 py-1.5 rounded-md hover:bg-border/60 text-[11px] font-semibold text-primary border border-border transition-colors"
+                onClick={() => {
+                  setShowSavePresetModal(false);
+                  setNewPresetName('');
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-3 py-1.5 rounded-md bg-accent hover:bg-accent/80 text-[11px] font-semibold text-white transition-colors"
+                onClick={handleSavePreset}
+                disabled={!newPresetName.trim()}
+              >
+                Save Preset
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Drop DB Confirm Modal */}
+      {showDropConfirmModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in p-4">
+          <div className="bg-surface border border-border rounded-xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-danger/15 border border-danger/30 flex items-center justify-center shrink-0 mt-0.5">
+                <svg className="w-4 h-4 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-[13px] font-bold text-primary">Drop Database</h3>
+                <p className="text-[11px] text-muted mt-1">
+                  Are you sure you want to permanently drop{' '}
+                  <span className="text-danger font-semibold">{dropTargetDb}</span>?{' '}
+                  This cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                className="px-3 py-1.5 rounded-md hover:bg-border/60 text-[11px] font-semibold text-primary border border-border transition-colors"
+                onClick={() => { setShowDropConfirmModal(false); setDropTargetDb(''); }}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-3 py-1.5 rounded-md bg-danger hover:bg-danger/80 text-[11px] font-semibold text-white transition-colors"
+                onClick={confirmDropDb}
+                autoFocus
+              >
+                Drop Database
               </button>
             </div>
           </div>

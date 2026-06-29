@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 contextBridge.exposeInMainWorld('git', {
   // Git operations
   status: (repoPath: string) => ipcRenderer.invoke('git:status', repoPath),
+  getAheadBehindCount: (repoPath: string, target: string) =>
+    ipcRenderer.invoke('git:getAheadBehindCount', repoPath, target),
   log: (repoPath: string, opts?: { maxCount?: number; from?: string; to?: string }) =>
     ipcRenderer.invoke('git:log', repoPath, opts),
   diff: (repoPath: string, opts?: { base?: string; staged?: boolean; file?: string }) =>

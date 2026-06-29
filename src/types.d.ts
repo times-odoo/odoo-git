@@ -106,6 +106,7 @@ export type CherryPickResult = {
 // IPC API exposed on window.git
 export interface GitAPI {
   status(repoPath: string): Promise<GitStatus>;
+  getAheadBehindCount(repoPath: string, target: string): Promise<{ ahead: number; behind: number }>;
   log(repoPath: string, opts?: { maxCount?: number; from?: string; to?: string }): Promise<LogEntry[]>;
   diff(repoPath: string, opts?: { base?: string; staged?: boolean; file?: string }): Promise<DiffFile[]>;
   diffRaw(repoPath: string, args: string[]): Promise<string>;
@@ -210,6 +211,8 @@ export interface OdooAPI {
     dbPassword?: string;
     initModules?: string;
     updateModules?: string;
+    useCustomCommand?: boolean;
+    customCommand?: string;
   }): Promise<void>;
   stopServer(): Promise<void>;
   getServerStatus(): Promise<{ status: 'starting' | 'running' | 'stopped'; cmd?: string; error?: string }>;

@@ -10,6 +10,13 @@ let odooProcess: ChildProcess | null = null;
 let currentCmd: string | undefined = undefined;
 let odooStatus: 'starting' | 'running' | 'stopped' = 'stopped';
 function buildOdooCommand(opts: any): { execCmd: string; execArgs: string[]; fullCommandString: string } {
+  if (opts.useCustomCommand && opts.customCommand) {
+    return {
+      execCmd: opts.customCommand,
+      execArgs: [],
+      fullCommandString: opts.customCommand
+    };
+  }
   const args: string[] = [];
   
   // DB Config
@@ -37,11 +44,16 @@ function buildOdooCommand(opts: any): { execCmd: string; execArgs: string[]; ful
     args.push('--dev=all');
   }
 
-  // Demo
-  if (opts.withDemo === true) {
-    args.push('--with-demo');
-  } else if (opts.withDemo === false) {
-    args.push('--without-demo');
+  // Demo (only for Odoo 18.0+)
+  const versionNum = parseFloat(opts.odooVersion);
+  const isPre18 = !isNaN(versionNum) && versionNum < 18.0;
+
+  if (!isPre18) {
+    if (opts.withDemo === true) {
+      args.push('--with-demo');
+    } else if (opts.withDemo === false) {
+      args.push('--without-demo');
+    }
   }
 
   // DB Name
@@ -112,6 +124,15 @@ function buildOdooCommand(opts: any): { execCmd: string; execArgs: string[]; ful
 }
 
 function getPortFromOpts(opts: any): number {
+  if (opts.useCustomCommand && opts.customCommand) {
+    const longPortMatch = opts.customCommand.match(/--http-port\s*=\s*(\d+)/);
+    if (longPortMatch) return parseInt(longPortMatch[1], 10);
+    const longPortSpaceMatch = opts.customCommand.match(/--http-port\s+(\d+)/);
+    if (longPortSpaceMatch) return parseInt(longPortSpaceMatch[1], 10);
+    const shortPortMatch = opts.customCommand.match(/-p\s+(\d+)/);
+    if (shortPortMatch) return parseInt(shortPortMatch[1], 10);
+    return 8069;
+  }
   let port = opts.port;
   if (port === undefined && opts.customArgs) {
     const longPortMatch = opts.customArgs.match(/--http-port\s*=\s*(\d+)/);
@@ -166,6 +187,10 @@ export function registerIpcHandlers() {
   // Git operations
   ipcMain.handle('git:status', async (_e, repoPath: string) => {
     return await gitBridge.getStatus(repoPath);
+  });
+
+  ipcMain.handle('git:getAheadBehindCount', async (_e, repoPath: string, target: string) => {
+    return await gitBridge.getAheadBehindCount(repoPath, target);
   });
 
   ipcMain.handle('git:log', async (_e, repoPath: string, opts?: { maxCount?: number; from?: string; to?: string }) => {
@@ -621,49 +646,84 @@ export function registerIpcHandlers() {
       store.set('pendingDbs', pendingDbs.filter(db => db !== dbName));
     }
 
-    let cmd = '';
+    const encodedPass = dbPassword ? encodeURIComponent(dbPassword) : '';
+    const hostPart = dbHost ? `${dbHost}` : '127.0.0.1';
+    const userArg = dbUser ? `-U ${dbUser}` : '';
+    const hostArg = dbHost ? `-h ${dbHost}` : '';
+
+    // Setup primary commands
+    let termCmd = '';
+    let dropCmd = '';
     if (dbPassword) {
-      const encodedPass = encodeURIComponent(dbPassword);
-      const hostPart = dbHost ? `${dbHost}` : '127.0.0.1';
-      cmd = `dropdb -w -d "postgresql://${dbUser || 'odoo'}:${encodedPass}@${hostPart}/postgres" ${dbName}`;
+      termCmd = `psql -w "postgresql://${dbUser || 'odoo'}:${encodedPass}@${hostPart}/postgres" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${dbName}' AND pid <> pg_backend_pid();"`;
+      dropCmd = `dropdb -w -f -d "postgresql://${dbUser || 'odoo'}:${encodedPass}@${hostPart}/postgres" ${dbName}`;
     } else {
-      const userArg = dbUser ? `-U ${dbUser}` : '';
-      const hostArg = dbHost ? `-h ${dbHost}` : '';
-      cmd = `dropdb -w ${userArg} ${hostArg} ${dbName}`;
+      termCmd = `psql -w ${userArg} ${hostArg} -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${dbName}' AND pid <> pg_backend_pid();"`;
+      dropCmd = `dropdb -w -f ${userArg} ${hostArg} ${dbName}`;
     }
-    console.log('[odoo:dropDb] Executing command:', cmd);
-    return new Promise<void>((resolve, reject) => {
-      exec(cmd, { env: { ...process.env, PGPASSWORD: dbPassword || '' } }, (err, stdout, stderr) => {
-        if (err) {
-          const errMsg = stderr || err.message || '';
-          if (errMsg.includes('does not exist')) {
+
+    // Setup fallback commands
+    const fallbackTermCmd = `psql -w -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${dbName}' AND pid <> pg_backend_pid();"`;
+    const fallbackDropCmd = `dropdb -w -f ${dbName}`;
+
+    const runCmd = (command: string, env: any) => {
+      return new Promise<void>((resolve, reject) => {
+        exec(command, { env }, (err, stdout, stderr) => {
+          if (err) {
+            reject({ err, stderr });
+          } else {
             resolve();
-            return;
           }
-          console.error('[odoo:dropDb] Command failed:', { cmd, stderr: stderr || '', error: err.message });
-          // Fallback to passwordless local Unix socket dropdb
-          const fallbackCmd = `dropdb -w ${dbName}`;
-          console.log('[odoo:dropDb] Trying fallback command:', fallbackCmd);
-          exec(fallbackCmd, { env: process.env }, (err2, stdout2, stderr2) => {
-            if (err2) {
-              const errMsg2 = stderr2 || err2.message || '';
-              if (errMsg2.includes('does not exist')) {
-                resolve();
-                return;
-              }
-              console.error('[odoo:dropDb] Fallback failed:', { cmd: fallbackCmd, stderr: stderr2 || '', error: err2.message });
-              const isAuthFail = (stderr || '').includes('password') || err.message.includes('password') || (stderr || '').includes('no password') ||
-                                 (stderr2 || '').includes('password') || err2.message.includes('password') || (stderr2 || '').includes('no password');
-              if (isAuthFail) {
-                reject(new Error('password_required'));
-              } else {
-                reject(new Error(stderr2 || `Failed to drop database ${dbName}`));
-              }
-            } else resolve();
-          });
-        } else resolve();
+        });
       });
-    });
+    };
+
+    console.log('[odoo:dropDb] Attempting to force drop database:', dbName);
+    const env = { ...process.env, PGPASSWORD: dbPassword || '' };
+
+    try {
+      // 1. Try terminating connections using primary credentials
+      await runCmd(termCmd, env).catch(err => {
+        console.warn('[odoo:dropDb] Failed to terminate connections (primary):', err.stderr || err.err?.message);
+      });
+      // 2. Try dropping the database
+      await runCmd(dropCmd, env);
+      console.log('[odoo:dropDb] Database dropped successfully via primary method.');
+    } catch (primaryErr: any) {
+      console.warn('[odoo:dropDb] Primary drop failed, attempting fallback...', primaryErr.stderr || primaryErr.err?.message);
+      const errMsg = primaryErr.stderr || primaryErr.err?.message || '';
+      if (errMsg.includes('does not exist')) {
+        return;
+      }
+
+      // Fallback method
+      try {
+        await runCmd(fallbackTermCmd, process.env).catch(err => {
+          console.warn('[odoo:dropDb] Failed to terminate connections (fallback):', err.stderr || err.err?.message);
+        });
+        await runCmd(fallbackDropCmd, process.env);
+        console.log('[odoo:dropDb] Database dropped successfully via fallback method.');
+      } catch (fallbackErr: any) {
+        const errMsg2 = fallbackErr.stderr || fallbackErr.err?.message || '';
+        if (errMsg2.includes('does not exist')) {
+          return;
+        }
+        console.error('[odoo:dropDb] Fallback failed:', fallbackErr.stderr || fallbackErr.err?.message);
+
+        const isAuthFail = (primaryErr.stderr || '').includes('password') || 
+                           (primaryErr.err?.message || '').includes('password') || 
+                           (primaryErr.stderr || '').includes('no password') ||
+                           (fallbackErr.stderr || '').includes('password') || 
+                           (fallbackErr.err?.message || '').includes('password') || 
+                           (fallbackErr.stderr || '').includes('no password');
+
+        if (isAuthFail) {
+          throw new Error('password_required');
+        } else {
+          throw new Error(fallbackErr.stderr || fallbackErr.err?.message || `Failed to drop database ${dbName}`);
+        }
+      }
+    }
   });
 
   // Odoo Server operations

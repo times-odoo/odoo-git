@@ -103,18 +103,59 @@ export function removeGitInstance(repoPath: string) {
 export async function getStatus(repoPath: string) {
   const git = getGit(repoPath);
   const status = await git.status();
+
+  // Custom separation of staged vs unstaged
+  const staged: string[] = [];
+  const modified: string[] = [];
+  const deleted: string[] = [];
+  const untracked: string[] = [];
+
+  for (const file of status.files) {
+    // If it's staged (index has a change character, not ' ' and not '?')
+    if (file.index !== ' ' && file.index !== '?') {
+      staged.push(file.path);
+    }
+    // If it has modifications in working tree
+    if (file.working_dir === 'M') {
+      modified.push(file.path);
+    }
+    // If it has deletions in working tree
+    if (file.working_dir === 'D') {
+      deleted.push(file.path);
+    }
+    // If it is untracked in working tree
+    if (file.index === '?' && file.working_dir === '?') {
+      untracked.push(file.path);
+    }
+  }
+
   return {
     current: status.current,
     tracking: status.tracking || null,
     ahead: status.ahead,
     behind: status.behind,
-    modified: status.modified,
-    staged: status.staged,
-    deleted: status.deleted,
-    untracked: status.not_added,
+    modified,
+    staged,
+    deleted,
+    untracked,
     conflicted: status.conflicted,
     isClean: status.isClean(),
   };
+}
+
+export async function getAheadBehindCount(repoPath: string, target: string) {
+  const git = getGit(repoPath);
+  try {
+    const aheadStr = await git.raw(['rev-list', '--count', '--max-count=1000', `${target}..HEAD`]);
+    const behindStr = await git.raw(['rev-list', '--count', '--max-count=1000', `HEAD..${target}`]);
+    return {
+      ahead: parseInt(aheadStr.trim(), 10) || 0,
+      behind: parseInt(behindStr.trim(), 10) || 0,
+    };
+  } catch (err) {
+    console.error('getAheadBehindCount error:', err);
+    return { ahead: 0, behind: 0 };
+  }
 }
 
 export async function getLog(repoPath: string, opts?: { maxCount?: number; from?: string; to?: string }) {

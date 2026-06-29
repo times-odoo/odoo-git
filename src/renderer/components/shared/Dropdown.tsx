@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { VirtualList } from './VirtualList';
 
 interface DropdownOption {
   value: string;
@@ -12,6 +13,7 @@ interface DropdownProps {
   className?: string;
   placeholder?: string;
   searchable?: boolean;
+  disabled?: boolean;
 }
 
 export function Dropdown({
@@ -21,6 +23,7 @@ export function Dropdown({
   className = '',
   placeholder = 'Select option...',
   searchable = false,
+  disabled = false,
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,13 +71,22 @@ export function Dropdown({
     opt.label.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const itemHeight = 34;
+  const maxListHeight = 192;
+  const listHeight = Math.min(filteredOptions.length * itemHeight, maxListHeight);
+
   return (
     <div ref={dropdownRef} className={`relative inline-block w-full ${className}`}>
       {/* Dropdown Trigger */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-between w-full input-field text-left cursor-pointer transition-all border border-border hover:border-accent/50 focus:border-accent focus:outline-none h-[36px]"
+        disabled={disabled}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={`flex items-center justify-between w-full input-field text-left transition-all border border-border h-full ${
+          disabled
+            ? 'opacity-50 cursor-not-allowed bg-[#0D1117]/30 text-muted'
+            : 'cursor-pointer hover:border-accent/50 focus:border-accent focus:outline-none'
+        }`}
       >
         <span className="truncate text-primary">
           {selectedOption ? selectedOption.label : placeholder}
@@ -107,35 +119,39 @@ export function Dropdown({
               />
             </div>
           )}
-          <div className="overflow-y-auto flex-1 max-h-48">
+          <div className="flex-1">
             {filteredOptions.length === 0 ? (
               <div className="px-3 py-2 text-muted text-[12px]">No options</div>
             ) : (
-              filteredOptions.map((opt) => {
-                const isSelected = opt.value === value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => {
-                      onChange(opt.value);
-                      setIsOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-[13px] transition-colors flex items-center justify-between cursor-pointer ${
-                      isSelected
-                        ? 'bg-accent/15 text-accent font-semibold border-l-2 border-accent'
-                        : 'text-primary hover:bg-border/30'
-                    }`}
-                  >
-                    <span className="truncate">{opt.label}</span>
-                    {isSelected && (
-                      <svg className="w-4 h-4 text-accent shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </button>
-                );
-              })
+              <VirtualList
+                items={filteredOptions}
+                itemHeight={itemHeight}
+                height={listHeight}
+                renderItem={(opt) => {
+                  const isSelected = opt.value === value;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChange(opt.value);
+                        setIsOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-[13px] transition-colors flex items-center justify-between cursor-pointer h-[34px] box-border ${
+                        isSelected
+                          ? 'bg-accent/15 text-accent font-semibold border-l-2 border-accent'
+                          : 'text-primary hover:bg-border/30'
+                      }`}
+                    >
+                      <span className="truncate">{opt.label}</span>
+                      {isSelected && (
+                        <svg className="w-4 h-4 text-accent shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                }}
+              />
             )}
           </div>
         </div>

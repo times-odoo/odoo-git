@@ -290,11 +290,11 @@ export function CommitComposer() {
             )}
           </div>
           <textarea
-            className={`input-field resize-y min-h-[80px] font-mono text-[12px] ${longLines.length > 0 ? 'border-danger/50 focus:border-danger' : ''}`}
+            className={`input-field resize-y min-h-[140px] font-mono text-[12px] ${longLines.length > 0 ? 'border-danger/50 focus:border-danger' : ''}`}
             placeholder={`Explain WHY this change is needed. What is the purpose?\nAvoid describing WHAT changed (visible in diff).\nReference: task-123, Fixes #123, opw-456`}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            rows={5}
+            rows={8}
           />
           {longLines.length > 0 ? (
             <p className="text-[10px] text-danger mt-1 font-semibold">

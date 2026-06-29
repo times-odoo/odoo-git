@@ -189,6 +189,26 @@ export default function App() {
           const store = useRepoStore.getState();
           store.setRepos(settings.repos);
           store.setActiveRepo(settings.lastActiveRepo || settings.repos[0].path);
+
+          // Fetch initial git status, branches, and remotes for ALL repositories in the background
+          settings.repos.forEach(async (r: any) => {
+            const gitStore = useGitStore.getState();
+            gitStore.setLoading(r.path, 'status', true);
+            gitStore.setLoading(r.path, 'branches', true);
+            try {
+              const [status, branches, remotes] = await Promise.all([
+                window.git.status(r.path),
+                window.git.branches(r.path),
+                window.git.remotes(r.path).catch(() => [])
+              ]);
+              gitStore.setRepoState(r.path, { status, branches, remotes });
+            } catch (e) {
+              console.error(`Failed to fetch initial git state for ${r.path}:`, e);
+            } finally {
+              gitStore.setLoading(r.path, 'status', false);
+              gitStore.setLoading(r.path, 'branches', false);
+            }
+          });
         }
       } catch {}
       setInitialized(true);

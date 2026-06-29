@@ -63,7 +63,16 @@ export function RepoRail() {
           const isActive = repo.path === activeRepoPath && activePanel !== 'settings' && activePanel !== 'odoo';
           const repoState = repoStates[repo.path];
           const isDirty = repoState?.status && !repoState.status.isClean;
-          const currentBranch = repoState?.status?.current || 'detached';
+          let currentBranch = 'loading...';
+          if (repoState) {
+            if (repoState.status) {
+              currentBranch = repoState.status.current || 'detached';
+            } else if (repoState.loading.status) {
+              currentBranch = 'loading...';
+            } else {
+              currentBranch = 'detached';
+            }
+          }
 
           return (
             <div
