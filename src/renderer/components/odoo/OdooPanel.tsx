@@ -4,6 +4,7 @@ import { useGitStore } from '../../store/git';
 import { useUIStore } from '../../store/ui';
 import { Dropdown } from '../shared/Dropdown';
 import { DbDropdown } from '../shared/DbDropdown';
+import { useGit } from '../../hooks/useGit';
 
 const stripAnsi = (str: string) => {
   return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
@@ -149,6 +150,281 @@ export function ModuleSelector({ label, modules, onChange, allModules, placehold
             >
               {suggestion}
             </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface AddonPathCardProps {
+  path: string;
+  absPath: string;
+  onRemove: () => void;
+  disabled?: boolean;
+}
+
+function AddonPathCard({ path, absPath, onRemove, disabled = false }: AddonPathCardProps) {
+  const repos = useRepoStore((s) => s.repos);
+  const repoStates = useGitStore((s) => s.repoStates);
+
+  // Find matching repository in the workspace
+  const matchedRepo = useMemo(() => {
+    return repos.find(r => 
+      absPath.toLowerCase() === r.path.toLowerCase() || 
+      absPath.toLowerCase().startsWith(r.path.toLowerCase() + '/')
+    );
+  }, [absPath, repos]);
+
+  const repoPath = matchedRepo?.path || null;
+  const { refreshAll, checkoutBranch, pullBranch } = useGit(repoPath);
+
+  const repoState = repoStates[repoPath || ''];
+  const currentBranch = repoState?.status?.current || '';
+  const branchesList = repoState?.branches?.local || [];
+  const isPulling = repoState?.loading.pull;
+  const isCheckingOut = repoState?.loading.checkout;
+
+  useEffect(() => {
+    if (repoPath) {
+      refreshAll();
+    }
+  }, [repoPath]);
+
+  const handlePull = async () => {
+    if (!repoPath || !repoState) return;
+    const remote = repoState.status?.tracking?.split('/')[0] || repoState.remotes[0]?.name || 'origin';
+    const branchName = currentBranch || 'master';
+    await pullBranch(remote, branchName);
+  };
+
+  return (
+    <div className="flex flex-col gap-2 p-2.5 bg-[#161B22]/50 border border-border/60 rounded-md relative hover:border-border transition-colors">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col min-w-0">
+          <span className="text-[12px] font-semibold text-primary truncate">
+            {matchedRepo ? matchedRepo.name : path.split('/').pop() || path}
+          </span>
+          <span className="text-[10px] text-muted truncate font-mono" title={absPath}>
+            {path}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {matchedRepo ? (
+            <span className="bg-success/10 text-success text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border border-success/20">
+              git repo
+            </span>
+          ) : (
+            <span className="bg-muted/10 text-muted text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border border-muted/20">
+              local dir
+            </span>
+          )}
+          {!disabled && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="text-muted hover:text-danger hover:scale-110 transition-all font-bold text-[16px] leading-none p-0.5 ml-0.5"
+              title="Remove path"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+
+      {matchedRepo && (
+        <div className="flex items-center gap-2 mt-1">
+          <div className="flex-1 min-w-0">
+            <Dropdown
+              options={branchesList.map((b) => b.name)}
+              value={currentBranch}
+              onChange={(val) => checkoutBranch(val)}
+              disabled={disabled || isCheckingOut || isPulling}
+              size="sm"
+              searchable={true}
+              placeholder="Select branch..."
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handlePull}
+            disabled={disabled || isCheckingOut || isPulling || !currentBranch}
+            className="btn-accent py-1 px-2.5 h-[24px] text-[11px] font-medium shrink-0 flex items-center justify-center gap-1"
+          >
+            {isPulling ? (
+              <>
+                <svg className="spinner text-accent shrink-0 animate-spin" width="10" height="10" viewBox="0 0 14 14" fill="none">
+                  <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="20 12" />
+                </svg>
+                <span>Pulling</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-3 h-3 text-accent shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 13l-7 7-7-7m14-6l-7 7-7-7" />
+                </svg>
+                <span>Pull</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface AddonsPathManagerProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}
+
+function AddonsPathManager({ label, value, onChange, disabled = false }: AddonsPathManagerProps) {
+  const repos = useRepoStore((s) => s.repos);
+  const activeRepoPath = useRepoStore((s) => s.activeRepoPath);
+
+  const [inputValue, setInputValue] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+
+  // Helper to resolve relative path to absolute
+  const getAbsPath = (pathStr: string) => {
+    if (!pathStr) return '';
+    if (pathStr.startsWith('/') || pathStr.match(/^[a-zA-Z]:\\/)) {
+      return pathStr;
+    }
+    if (!activeRepoPath) return pathStr;
+    const baseParts = activeRepoPath.split('/').filter(Boolean);
+    const relParts = pathStr.split('/').filter(Boolean);
+    for (const part of relParts) {
+      if (part === '..') {
+        baseParts.pop();
+      } else if (part !== '.') {
+        baseParts.push(part);
+      }
+    }
+    return '/' + baseParts.join('/');
+  };
+
+  const pathList = useMemo(() => {
+    return value.split(',').map((s) => s.trim()).filter(Boolean);
+  }, [value]);
+
+  const query = inputValue.trim().toLowerCase();
+
+  // Suggestions are repositories paths in the workspace that are not already added
+  const suggestions = useMemo(() => {
+    return repos.map(r => r.path);
+  }, [repos]);
+
+  const filteredSuggestions = query
+    ? suggestions
+        .filter(p => 
+          p.toLowerCase().includes(query) && 
+          !pathList.some(exist => getAbsPath(exist).toLowerCase() === p.toLowerCase())
+        )
+        .slice(0, 15)
+    : suggestions.filter(p => 
+        !pathList.some(exist => getAbsPath(exist).toLowerCase() === p.toLowerCase())
+      ).slice(0, 15);
+
+  const addPath = (newPath: string) => {
+    if (disabled) return;
+    const trimmed = newPath.trim();
+    if (trimmed && !pathList.includes(trimmed)) {
+      const newList = [...pathList, trimmed];
+      onChange(newList.join(','));
+    }
+    setInputValue('');
+    setFocusedIndex(-1);
+    setShowSuggestions(false);
+  };
+
+  const removePath = (targetPath: string) => {
+    if (disabled) return;
+    const newList = pathList.filter((p) => p !== targetPath);
+    onChange(newList.join(','));
+  };
+
+  return (
+    <div className="space-y-2 relative">
+      <div className="relative">
+        <label className="block text-[10px] text-muted font-bold uppercase mb-1">{label}</label>
+        <div className={`flex flex-wrap items-center gap-1.5 p-1.5 bg-[#0D1117]/60 border border-border rounded focus-within:border-accent/70 transition-colors w-full min-h-[34px] ${
+          disabled ? 'opacity-50 cursor-not-allowed pointer-events-none bg-[#0D1117]/30' : 'cursor-text'
+        }`}>
+          <input
+            type="text"
+            disabled={disabled}
+            className="bg-transparent border-none outline-none flex-1 min-w-[200px] text-primary text-[12px] font-mono p-0 h-[20px] disabled:cursor-not-allowed"
+            placeholder="Search repo paths or paste custom path..."
+            value={inputValue}
+            onChange={(e) => {
+              if (disabled) return;
+              setInputValue(e.target.value);
+              setShowSuggestions(true);
+              setFocusedIndex(-1);
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') {
+                if (filteredSuggestions.length > 0) {
+                  e.preventDefault();
+                  setFocusedIndex(prev => (prev + 1) % filteredSuggestions.length);
+                }
+              } else if (e.key === 'ArrowUp') {
+                if (filteredSuggestions.length > 0) {
+                  e.preventDefault();
+                  setFocusedIndex(prev => (prev - 1 + filteredSuggestions.length) % filteredSuggestions.length);
+                }
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (focusedIndex >= 0 && focusedIndex < filteredSuggestions.length) {
+                  addPath(filteredSuggestions[focusedIndex]);
+                } else if (inputValue.trim()) {
+                  addPath(inputValue.trim());
+                }
+              } else if (e.key === 'Escape') {
+                setShowSuggestions(false);
+                setFocusedIndex(-1);
+              }
+            }}
+          />
+        </div>
+
+        {showSuggestions && filteredSuggestions.length > 0 && (
+          <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-[#1C2129] border border-border rounded shadow-xl z-[9999] py-1">
+            {filteredSuggestions.map((suggestion, index) => {
+              const repoName = repos.find(r => r.path === suggestion)?.name || suggestion;
+              return (
+                <div
+                  key={suggestion}
+                  className={`px-3 py-1.5 font-mono text-[12px] cursor-pointer transition-colors flex justify-between items-center ${
+                    index === focusedIndex ? 'bg-accent/20 text-accent font-semibold' : 'text-primary hover:bg-border/30'
+                  }`}
+                  onClick={() => addPath(suggestion)}
+                >
+                  <span className="truncate font-semibold text-primary">{repoName}</span>
+                  <span className="text-[10px] text-muted truncate ml-2 max-w-[60%] font-mono">{suggestion}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {pathList.length > 0 && (
+        <div className="grid grid-cols-2 gap-2.5 mt-2">
+          {pathList.map((path) => (
+            <AddonPathCard
+              key={path}
+              path={path}
+              absPath={getAbsPath(path)}
+              onRemove={() => removePath(path)}
+              disabled={disabled}
+            />
           ))}
         </div>
       )}
@@ -1815,17 +2091,14 @@ export function OdooPanel() {
                       className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-3 border border-border rounded outline-none text-primary min-h-[36px] focus:border-accent/70 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
-                  <div>
-                    <label className="block text-[10px] text-muted font-bold uppercase mb-1">Addons Path</label>
-                    <input
-                      type="text"
-                      disabled={runUseCustomCommand}
-                      value={runAddons}
-                      onChange={(e) => setRunAddons(e.target.value)}
-                      className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-3 border border-border rounded outline-none font-mono text-primary min-h-[36px] focus:border-accent/70 disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                  </div>
                 </div>
+
+                <AddonsPathManager
+                  label="Addons Path"
+                  value={runAddons}
+                  onChange={setRunAddons}
+                  disabled={runUseCustomCommand}
+                />
 
                 <div className="grid grid-cols-2 gap-3">
                   <ModuleSelector
@@ -1952,16 +2225,12 @@ export function OdooPanel() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] text-muted font-bold uppercase mb-1">Addons Path</label>
-                  <input
-                    type="text"
-                    disabled={upUseCustomCommand}
-                    value={upAddons}
-                    onChange={(e) => setUpAddons(e.target.value)}
-                    className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
+                <AddonsPathManager
+                  label="Addons Path"
+                  value={upAddons}
+                  onChange={setUpAddons}
+                  disabled={upUseCustomCommand}
+                />
 
                 <ModuleSelector
                   label="Update Module (-u)"
@@ -2106,16 +2375,12 @@ export function OdooPanel() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] text-muted font-bold uppercase mb-1">Addons Path</label>
-                  <input
-                    type="text"
-                    disabled={testUseCustomCommand}
-                    value={testAddons}
-                    onChange={(e) => setTestAddons(e.target.value)}
-                    className="w-full bg-bg text-[12px] py-1 px-2 border border-border rounded outline-none font-mono text-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
+                <AddonsPathManager
+                  label="Addons Path"
+                  value={testAddons}
+                  onChange={setTestAddons}
+                  disabled={testUseCustomCommand}
+                />
 
                 <div className="flex items-center gap-4 py-1">
                   <label className={`flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none ${testUseCustomCommand ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}>
