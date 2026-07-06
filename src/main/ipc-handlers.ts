@@ -34,6 +34,12 @@ function buildOdooCommand(opts: any): { execCmd: string; execArgs: string[]; ful
   const addons = opts.addonsPath || 'addons,../enterprise';
   args.push(`--addons-path=${addons}`);
 
+  // DB Name (Moved next to addons path)
+  if (opts.dbName) {
+    args.push('-d');
+    args.push(opts.dbName);
+  }
+
   // Port
   if (opts.port !== undefined) {
     args.push(`--http-port=${opts.port}`);
@@ -44,22 +50,19 @@ function buildOdooCommand(opts: any): { execCmd: string; execArgs: string[]; ful
     args.push('--dev=all');
   }
 
-  // Demo (only for Odoo 18.0+)
+  // Demo (Unified for older and newer Odoo versions)
   const versionNum = parseFloat(opts.odooVersion);
   const isPre18 = !isNaN(versionNum) && versionNum < 18.0;
+  const withDemo = opts.withDemo === true || opts.withDemo === 'true';
 
   if (!isPre18) {
-    if (opts.withDemo === true) {
+    if (withDemo) {
       args.push('--with-demo');
-    } else if (opts.withDemo === false) {
-      args.push('--without-demo');
     }
-  }
-
-  // DB Name
-  if (opts.dbName) {
-    args.push('-d');
-    args.push(opts.dbName);
+  } else {
+    if (!withDemo) {
+      args.push('--without-demo=all');
+    }
   }
 
   if (opts.commandType === 'run') {

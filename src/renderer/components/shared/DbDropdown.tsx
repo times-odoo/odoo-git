@@ -147,7 +147,10 @@ export function DbDropdown({
             {/* New DB Button */}
             <button
               type="button"
-              onClick={onCreateNew}
+              onClick={() => {
+                setIsOpen(false);
+                onCreateNew();
+              }}
               className="px-2.5 shrink-0 flex items-center justify-center gap-1 bg-accent hover:bg-accent/80 text-[10px] text-white font-semibold rounded transition-colors border border-accent"
               title="Create New Database"
             >

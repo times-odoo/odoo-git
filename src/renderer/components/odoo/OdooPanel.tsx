@@ -954,12 +954,6 @@ export function OdooPanel() {
     }
 
     const args: string[] = [];
-    if (targetDb) {
-      args.push('-d', targetDb);
-    } else {
-      args.push('--no-database');
-    }
-
     if (dbUser && dbUser !== 'odoo') {
       args.push('--db_user', dbUser);
     }
@@ -972,6 +966,12 @@ export function OdooPanel() {
 
     if (addons) {
       args.push('--addons-path', addons);
+    }
+
+    if (targetDb) {
+      args.push('-d', targetDb);
+    } else {
+      args.push('--no-database');
     }
 
     if (activeTab === 'run') {
@@ -987,8 +987,19 @@ export function OdooPanel() {
       if (devAll) {
         args.push('--dev=all');
       }
-      if (withDemo === false) {
-        args.push('--without-demo=all');
+      
+      const versionNum = parseFloat(odooVersion);
+      const isPre18 = !isNaN(versionNum) && versionNum < 18.0;
+      const withDemoBool = withDemo === true;
+
+      if (!isPre18) {
+        if (withDemoBool) {
+          args.push('--with-demo');
+        }
+      } else {
+        if (!withDemoBool) {
+          args.push('--without-demo=all');
+        }
       }
     } else if (activeTab === 'upgrade') {
       if (upgradePaths) {

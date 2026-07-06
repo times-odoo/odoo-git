@@ -231,15 +231,18 @@ export function useGit(repoPath: string | null) {
   const createBranch = useCallback(
     async (branch: string, startPoint: string) => {
       if (!repoPath) return;
+      setLoading(repoPath, 'createBranch', true);
       try {
         await window.git.checkoutNew(repoPath, branch, startPoint);
         addToast({ message: `Created & switched to ${branch}`, type: 'success' });
         await refreshAll();
       } catch (e) {
         handleError(e, 'Create branch');
+      } finally {
+        setLoading(repoPath, 'createBranch', false);
       }
     },
-    [repoPath, addToast, refreshAll, handleError]
+    [repoPath, setLoading, addToast, refreshAll, handleError]
   );
 
   const commitChanges = useCallback(

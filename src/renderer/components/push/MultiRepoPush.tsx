@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useRepoStore } from '../../store/repos';
 import { useGitStore } from '../../store/git';
 import { useUIStore } from '../../store/ui';
+import { Dropdown } from '../shared/Dropdown';
 
 export function MultiRepoPush() {
   const repos = useRepoStore((s) => s.repos);
@@ -10,6 +11,7 @@ export function MultiRepoPush() {
   const [pushing, setPushing] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [results, setResults] = useState<{ path: string; name: string; status: 'pending' | 'success' | 'error' | 'skipped'; message?: string }[]>([]);
+  const [selectedRemotes, setSelectedRemotes] = useState<Record<string, string>>({});
 
   const initializedPathsRef = React.useRef<Record<string, boolean>>({});
 
@@ -45,6 +47,42 @@ export function MultiRepoPush() {
     }
   }, [repos, repoStates]);
 
+  // Initialize selected remotes when repos/repoStates load
+  React.useEffect(() => {
+    const updated = { ...selectedRemotes };
+    let changed = false;
+
+    repos.forEach((repo) => {
+      if (updated[repo.path]) return; // already initialized
+
+      // Get saved remote
+      const savedRemote = localStorage.getItem(`push_remote:${repo.path}`);
+      const repoRemotes = repoStates[repo.path]?.remotes || [];
+      
+      if (savedRemote && repoRemotes.some((r) => r.name === savedRemote)) {
+        updated[repo.path] = savedRemote;
+        changed = true;
+      } else {
+        // Fallback to default
+        const repoName = repo.path.split('/').pop()?.toLowerCase() || '';
+        let def = '';
+        if (repoName.includes('enterprise') || repoName.includes('ent')) {
+          def = repoRemotes.find((r) => r.name === 'ent-dev')?.name || repoRemotes[0]?.name || '';
+        } else {
+          def = repoRemotes.find((r) => r.name === 'odoo-dev')?.name || repoRemotes[0]?.name || '';
+        }
+        if (def) {
+          updated[repo.path] = def;
+          changed = true;
+        }
+      }
+    });
+
+    if (changed) {
+      setSelectedRemotes(updated);
+    }
+  }, [repos, repoStates, selectedRemotes]);
+
   const handlePushAll = async () => {
     if (selectedPaths.length === 0) return;
     setPushing(true);
@@ -63,12 +101,15 @@ export function MultiRepoPush() {
         const status = await window.git.status(repoPath);
         if (!status.current) throw new Error('No branch');
 
-        const remotes = await window.git.remotes(repoPath);
-        const repoName = repoPath.split('/').pop()?.toLowerCase() || '';
-        const defaultRemote = repoName.includes('enterprise')
-          ? remotes.find((r) => r.name === 'ent-dev')?.name
-          : remotes.find((r) => r.name === 'odoo-dev')?.name;
-        const remote = defaultRemote || remotes[0]?.name;
+        let remote = selectedRemotes[repoPath];
+        if (!remote) {
+          const remotesList = await window.git.remotes(repoPath);
+          const repoName = repoPath.split('/').pop()?.toLowerCase() || '';
+          const defaultRemote = repoName.includes('enterprise')
+            ? remotesList.find((r) => r.name === 'ent-dev')?.name
+            : remotesList.find((r) => r.name === 'odoo-dev')?.name;
+          remote = defaultRemote || remotesList[0]?.name;
+        }
 
         if (!remote) throw new Error('No remote configured');
 
@@ -113,7 +154,7 @@ export function MultiRepoPush() {
           </button>
         </div>
       </div>
-      <p className="text-[12px] text-muted">Push selected repositories simultaneously to their default *-dev remotes.</p>
+      <p className="text-[12px] text-muted">Push selected repositories simultaneously to their chosen or default remotes.</p>
 
       <div className="space-y-1.5">
         {repos.map((repo) => {
@@ -121,6 +162,7 @@ export function MultiRepoPush() {
           const branch = repoState?.status?.current || '—';
           const result = results.find((r) => r.path === repo.path);
           const isSelected = selectedPaths.includes(repo.path);
+          const repoRemotes = repoState?.remotes || [];
 
           return (
             <div
@@ -146,9 +188,26 @@ export function MultiRepoPush() {
               />
               <span className={`text-primary font-medium transition-opacity ${!isSelected ? 'opacity-40' : ''}`}>{repo.name}</span>
               <span className={`font-mono text-[11px] text-accent transition-opacity ${!isSelected ? 'opacity-40' : ''}`}>{branch}</span>
-              <span className="ml-auto shrink-0">
+              
+              {/* Remote Selector */}
+              <div className="ml-auto flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <span className={`text-[10px] text-muted ${!isSelected ? 'opacity-40' : ''}`}>remote:</span>
+                <Dropdown
+                  options={repoRemotes.map((r) => r.name)}
+                  value={selectedRemotes[repo.path] || ''}
+                  onChange={(val) => {
+                    setSelectedRemotes((prev) => ({ ...prev, [repo.path]: val }));
+                    localStorage.setItem(`push_remote:${repo.path}`, val);
+                  }}
+                  disabled={pushing || !isSelected}
+                  size="sm"
+                  className="w-[90px]"
+                />
+              </div>
+
+              <span className="shrink-0 min-w-[60px] text-right font-medium">
                 {result?.status === 'pending' && (
-                  <svg className="spinner text-muted" width="12" height="12" viewBox="0 0 14 14" fill="none">
+                  <svg className="spinner text-muted inline" width="12" height="12" viewBox="0 0 14 14" fill="none">
                     <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="20 12" />
                   </svg>
                 )}

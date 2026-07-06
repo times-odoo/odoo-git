@@ -19,6 +19,7 @@ export function BranchCreator({ trigram = '', defaultVersion = 'master' }: Branc
   const activeRepoPath = useRepoStore((s) => s.activeRepoPath);
   const repoState = useGitStore((s) => (activeRepoPath ? s.repoStates[activeRepoPath] : null));
   const { createBranch, refreshRemotes } = useGit(activeRepoPath);
+  const isCreating = repoState?.loading?.createBranch || false;
 
   // Extract versions from odoo or ent remotes
   const dynamicVersions = useMemo(() => {
@@ -184,11 +185,11 @@ export function BranchCreator({ trigram = '', defaultVersion = 'master' }: Branc
   }, [version, modules, tag, description, trigramValue]);
 
   const handleCreate = async () => {
-    if (modules.length === 0 || !base) return;
+    if (modules.length === 0 || !base || isCreating) return;
     await createBranch(branchName, base);
   };
 
-  const isValid = modules.length > 0 && base.length > 0;
+  const isValid = modules.length > 0 && base.length > 0 && !isCreating;
 
   return (
     <div className="p-4 space-y-4">
@@ -202,6 +203,7 @@ export function BranchCreator({ trigram = '', defaultVersion = 'master' }: Branc
           value={version}
           onChange={setVersion}
           searchable={true}
+          disabled={isCreating}
         />
       </div>
 
@@ -212,8 +214,9 @@ export function BranchCreator({ trigram = '', defaultVersion = 'master' }: Branc
           {TAGS.map((t) => (
             <button
               key={t}
-              className={`transition-all ${tag === t ? '' : 'opacity-40 hover:opacity-70'}`}
-              onClick={() => setTag(t)}
+              disabled={isCreating}
+              className={`transition-all ${tag === t ? '' : 'opacity-40 hover:opacity-70'} ${isCreating ? 'cursor-not-allowed' : ''}`}
+              onClick={() => !isCreating && setTag(t)}
             >
               <Badge tag={t} size="lg" />
             </button>
@@ -224,7 +227,7 @@ export function BranchCreator({ trigram = '', defaultVersion = 'master' }: Branc
       {/* Module */}
       <div className="relative">
         <label className="text-[12px] text-muted mb-1 block">Module name</label>
-        <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-[#0D1117] border border-border rounded focus-within:border-accent/70 transition-colors w-full cursor-text min-h-[36px]">
+        <div className={`flex flex-wrap items-center gap-1.5 p-1.5 bg-[#0D1117] border border-border rounded focus-within:border-accent/70 transition-colors w-full cursor-text min-h-[36px] ${isCreating ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}>
           {modules.map((m) => (
             <span
               key={m}
@@ -234,7 +237,8 @@ export function BranchCreator({ trigram = '', defaultVersion = 'master' }: Branc
               <button
                 type="button"
                 className="text-danger hover:scale-120 transition-all font-extrabold text-[15px] leading-none shrink-0 ml-1.5"
-                onClick={() => removeModule(m)}
+                onClick={() => !isCreating && removeModule(m)}
+                disabled={isCreating}
               >
                 ×
               </button>
@@ -242,17 +246,19 @@ export function BranchCreator({ trigram = '', defaultVersion = 'master' }: Branc
           ))}
           <input
             type="text"
-            className="bg-transparent border-none outline-none flex-1 min-w-[120px] text-primary text-[12px] font-mono p-0 h-[22px]"
+            className="bg-transparent border-none outline-none flex-1 min-w-[120px] text-primary text-[12px] font-mono p-0 h-[22px] disabled:cursor-not-allowed"
             placeholder={modules.length === 0 ? "account_reports" : ""}
             value={inputValue}
+            disabled={isCreating}
             onChange={(e) => {
               setInputValue(e.target.value);
               setShowSuggestions(true);
               setFocusedIndex(-1);
             }}
-            onFocus={() => setShowSuggestions(true)}
+            onFocus={() => !isCreating && setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
             onKeyDown={(e) => {
+              if (isCreating) return;
               if (e.key === 'ArrowDown') {
                 if (filteredSuggestions.length > 0) {
                   e.preventDefault();
@@ -280,7 +286,7 @@ export function BranchCreator({ trigram = '', defaultVersion = 'master' }: Branc
           />
         </div>
 
-        {showSuggestions && filteredSuggestions.length > 0 && (
+        {showSuggestions && filteredSuggestions.length > 0 && !isCreating && (
           <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-[#1C2129] border border-border rounded shadow-xl z-50 py-1">
             {filteredSuggestions.map((suggestion, index) => (
               <div
@@ -305,6 +311,7 @@ export function BranchCreator({ trigram = '', defaultVersion = 'master' }: Branc
           className="input-field"
           placeholder="optimize-pdf-header"
           value={description}
+          disabled={isCreating}
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
@@ -316,6 +323,7 @@ export function BranchCreator({ trigram = '', defaultVersion = 'master' }: Branc
           type="text"
           className="input-field font-mono w-24"
           value={trigramValue}
+          disabled={isCreating}
           onChange={(e) => {
             const val = e.target.value.toLowerCase();
             setTrigramValue(val);
@@ -335,6 +343,7 @@ export function BranchCreator({ trigram = '', defaultVersion = 'master' }: Branc
           onChange={setBase}
           placeholder="Select base..."
           searchable={true}
+          disabled={isCreating}
         />
       </div>
 
@@ -357,7 +366,16 @@ export function BranchCreator({ trigram = '', defaultVersion = 'master' }: Branc
         onClick={handleCreate}
         disabled={!isValid}
       >
-        Create & Checkout Branch
+        {isCreating ? (
+          <>
+            <svg className="spinner mr-2" width="12" height="12" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="20 12" />
+            </svg>
+            Creating & Checking out branch...
+          </>
+        ) : (
+          'Create & Checkout Branch'
+        )}
       </button>
     </div>
   );

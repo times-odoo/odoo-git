@@ -418,7 +418,7 @@ export default function App() {
               {activePanel !== 'odoo' && renderPanel()}
 
               {/* Premium Glassmorphic Loading Overlay */}
-              {(isLoading?.checkout || isLoading?.pull || isLoading?.rebase || isLoading?.cherryPick) && (
+              {(isLoading?.checkout || isLoading?.pull || isLoading?.rebase || isLoading?.cherryPick || isLoading?.createBranch) && (
                 <div className="absolute inset-0 bg-bg/50 backdrop-blur-sm flex flex-col items-center justify-center z-50 transition-all duration-300">
                   <div className="bg-surface/90 border border-border/80 rounded-xl p-6 flex flex-col items-center gap-3.5 shadow-2xl min-w-[200px] transform scale-100 animate-in fade-in zoom-in duration-200">
                     <div className="relative w-8 h-8 flex items-center justify-center">
@@ -434,6 +434,8 @@ export default function App() {
                         ? 'Pulling changes...'
                         : isLoading?.rebase
                         ? 'Rebasing branch...'
+                        : isLoading?.createBranch
+                        ? 'Creating branch...'
                         : 'Cherry-picking commits...'}
                     </span>
                   </div>

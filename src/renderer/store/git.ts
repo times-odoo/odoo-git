@@ -22,6 +22,7 @@ interface PerRepoState {
     rebase: boolean;
     checkout: boolean;
     pull: boolean;
+    createBranch: boolean;
   };
   error: string | null;
 }
@@ -47,6 +48,7 @@ const defaultRepoState: PerRepoState = {
     rebase: false,
     checkout: false,
     pull: false,
+    createBranch: false,
   },
   error: null,
 };

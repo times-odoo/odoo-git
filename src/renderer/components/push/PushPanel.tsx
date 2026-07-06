@@ -34,10 +34,21 @@ export function PushPanel() {
   }, [activeRepoPath]);
 
   useEffect(() => {
-    if (defaultRemote && !selectedRemote) {
+    if (!activeRepoPath) return;
+    const savedRemote = localStorage.getItem(`push_remote:${activeRepoPath}`);
+    if (savedRemote && remotes.some((r) => r.name === savedRemote)) {
+      setSelectedRemote(savedRemote);
+    } else if (defaultRemote) {
       setSelectedRemote(defaultRemote);
     }
-  }, [defaultRemote]);
+  }, [activeRepoPath, defaultRemote, remotes]);
+
+  const handleRemoteChange = (remote: string) => {
+    setSelectedRemote(remote);
+    if (activeRepoPath) {
+      localStorage.setItem(`push_remote:${activeRepoPath}`, remote);
+    }
+  };
 
   const pushCommand = useMemo(() => {
     let cmd = `git push`;
@@ -76,7 +87,7 @@ export function PushPanel() {
         <Dropdown
           options={remotes.map((r) => r.name)}
           value={selectedRemote}
-          onChange={setSelectedRemote}
+          onChange={handleRemoteChange}
         />
       </div>
 

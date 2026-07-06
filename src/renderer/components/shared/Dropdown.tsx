@@ -14,6 +14,7 @@ interface DropdownProps {
   placeholder?: string;
   searchable?: boolean;
   disabled?: boolean;
+  size?: 'sm' | 'md';
 }
 
 export function Dropdown({
@@ -24,6 +25,7 @@ export function Dropdown({
   placeholder = 'Select option...',
   searchable = false,
   disabled = false,
+  size = 'md',
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,8 +73,8 @@ export function Dropdown({
     opt.label.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const itemHeight = 34;
-  const maxListHeight = 192;
+  const itemHeight = size === 'sm' ? 26 : 34;
+  const maxListHeight = size === 'sm' ? 150 : 192;
   const listHeight = Math.min(filteredOptions.length * itemHeight, maxListHeight);
 
   return (
@@ -82,7 +84,9 @@ export function Dropdown({
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`flex items-center justify-between w-full input-field text-left transition-all border border-border h-full ${
+        className={`flex items-center justify-between w-full bg-bg border border-border rounded text-left transition-all h-full ${
+          size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1.5 text-[13px]'
+        } ${
           disabled
             ? 'opacity-50 cursor-not-allowed bg-[#0D1117]/30 text-muted'
             : 'cursor-pointer hover:border-accent/50 focus:border-accent focus:outline-none'
@@ -92,7 +96,7 @@ export function Dropdown({
           {selectedOption ? selectedOption.label : placeholder}
         </span>
         <svg
-          className={`w-4 h-4 text-muted transition-transform duration-200 shrink-0 ml-2 ${
+          className={`w-3.5 h-3.5 text-muted transition-transform duration-200 shrink-0 ml-1.5 ${
             isOpen ? 'rotate-180 text-accent' : ''
           }`}
           fill="none"
@@ -136,7 +140,9 @@ export function Dropdown({
                         onChange(opt.value);
                         setIsOpen(false);
                       }}
-                      className={`w-full text-left px-3 py-2 text-[13px] transition-colors flex items-center justify-between cursor-pointer h-[34px] box-border ${
+                      className={`w-full text-left px-2.5 py-1 transition-colors flex items-center justify-between cursor-pointer box-border ${
+                        size === 'sm' ? 'text-[11px] h-[26px]' : 'text-[13px] h-[34px]'
+                      } ${
                         isSelected
                           ? 'bg-accent/15 text-accent font-semibold border-l-2 border-accent'
                           : 'text-primary hover:bg-border/30'
@@ -144,7 +150,7 @@ export function Dropdown({
                     >
                       <span className="truncate">{opt.label}</span>
                       {isSelected && (
-                        <svg className="w-4 h-4 text-accent shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-3.5 h-3.5 text-accent shrink-0 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                         </svg>
                       )}
