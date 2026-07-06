@@ -1264,18 +1264,9 @@ export function OdooPanel() {
         args.push('--dev=all');
       }
       
-      const versionNum = parseFloat(odooVersion);
-      const isPre18 = !isNaN(versionNum) && versionNum < 18.0;
       const withDemoBool = withDemo === true;
-
-      if (!isPre18) {
-        if (withDemoBool) {
-          args.push('--with-demo');
-        }
-      } else {
-        if (!withDemoBool) {
-          args.push('--without-demo=all');
-        }
+      if (withDemoBool) {
+        args.push('--with-demo');
       }
     } else if (activeTab === 'upgrade') {
       if (upgradePaths) {

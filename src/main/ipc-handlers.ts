@@ -50,19 +50,10 @@ function buildOdooCommand(opts: any): { execCmd: string; execArgs: string[]; ful
     args.push('--dev=all');
   }
 
-  // Demo (Unified for older and newer Odoo versions)
-  const versionNum = parseFloat(opts.odooVersion);
-  const isPre18 = !isNaN(versionNum) && versionNum < 18.0;
+  // Demo
   const withDemo = opts.withDemo === true || opts.withDemo === 'true';
-
-  if (!isPre18) {
-    if (withDemo) {
-      args.push('--with-demo');
-    }
-  } else {
-    if (!withDemo) {
-      args.push('--without-demo=all');
-    }
+  if (withDemo) {
+    args.push('--with-demo');
   }
 
   if (opts.commandType === 'run') {
