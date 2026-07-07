@@ -760,6 +760,14 @@ export function OdooPanel() {
       return [];
     }
   });
+  const [testUpdateModules, setTestUpdateModules] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('odoo_testUpdateModules');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
 
 
@@ -797,6 +805,8 @@ export function OdooPanel() {
     // test
     testAddons?: string;
     testDbName?: string;
+    testModules?: string[];
+    testUpdateModules?: string[];
     testTags?: string;
     testPort?: number;
     testStopAfterInit?: boolean;
@@ -1129,6 +1139,14 @@ export function OdooPanel() {
       setTestDbName(preset.testDbName);
       localStorage.setItem('odoo_testDbName', preset.testDbName);
     }
+    if (preset.testModules !== undefined) {
+      setTestModules(preset.testModules);
+      localStorage.setItem('odoo_testModules', JSON.stringify(preset.testModules));
+    }
+    if (preset.testUpdateModules !== undefined) {
+      setTestUpdateModules(preset.testUpdateModules);
+      localStorage.setItem('odoo_testUpdateModules', JSON.stringify(preset.testUpdateModules));
+    }
     if (preset.testTags !== undefined) {
       setTestTags(preset.testTags);
       localStorage.setItem('odoo_testTags', preset.testTags);
@@ -1236,6 +1254,8 @@ export function OdooPanel() {
       // test
       testAddons,
       testDbName,
+      testModules,
+      testUpdateModules,
       testTags,
       testPort,
       testStopAfterInit,
@@ -1298,6 +1318,8 @@ export function OdooPanel() {
       // test
       testAddons,
       testDbName,
+      testModules,
+      testUpdateModules,
       testTags,
       testPort,
       testStopAfterInit,
@@ -1393,6 +1415,7 @@ export function OdooPanel() {
       targetDb = testDbName;
       addons = testAddons;
       initModules = testModules;
+      updateModules = testUpdateModules;
       testTagsVal = testTags;
       stopAfterInit = testStopAfterInit;
       customArgs = testCustomArgs;
@@ -1453,6 +1476,9 @@ export function OdooPanel() {
       if (initModules.length > 0) {
         args.push('-i', initModules.join(','));
       }
+      if (updateModules.length > 0) {
+        args.push('-u', updateModules.join(','));
+      }
       if (testTagsVal) {
         args.push('--test-tags', testTagsVal);
       }
@@ -1482,7 +1508,7 @@ export function OdooPanel() {
     runUseCustomCommand, runCustomCommand,
     upDbName, upUpgradePaths, upAddons, upUpdateModules, upRestoreTemplate, upTemplateDb, upStopAfterInit, upCustomArgs,
     upUseCustomCommand, upCustomCommand,
-    testAddons, testDbName, testModules, testTags, testPort, testStopAfterInit, testCustomArgs,
+    testAddons, testDbName, testModules, testUpdateModules, testTags, testPort, testStopAfterInit, testCustomArgs,
     testUseCustomCommand, testCustomCommand,
     dbUser, dbHost, dbPassword, selectedVenv, odooVersion
   ]);
@@ -1523,6 +1549,7 @@ export function OdooPanel() {
     localStorage.setItem('odoo_testAddons', testAddons);
     localStorage.setItem('odoo_testDbName', testDbName);
     localStorage.setItem('odoo_testModules', JSON.stringify(testModules));
+    localStorage.setItem('odoo_testUpdateModules', JSON.stringify(testUpdateModules));
     localStorage.setItem('odoo_testTags', testTags);
     localStorage.setItem('odoo_testPort', testPort.toString());
     localStorage.setItem('odoo_testStopAfterInit', testStopAfterInit.toString());
@@ -1534,7 +1561,7 @@ export function OdooPanel() {
     runUseCustomCommand, runCustomCommand,
     upDbName, upUpgradePaths, upAddons, upUpdateModules, upRestoreTemplate, upTemplateDb, upStopAfterInit, upCustomArgs,
     upUseCustomCommand, upCustomCommand,
-    testAddons, testDbName, testModules, testTags, testPort, testStopAfterInit, testCustomArgs,
+    testAddons, testDbName, testModules, testUpdateModules, testTags, testPort, testStopAfterInit, testCustomArgs,
     testUseCustomCommand, testCustomCommand
   ]);
 
@@ -2683,7 +2710,7 @@ export function OdooPanel() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 items-end">
+                <div className="grid grid-cols-2 gap-3">
                   <ModuleSelector
                     label="Install Module (-i)"
                     modules={testModules}
@@ -2692,17 +2719,26 @@ export function OdooPanel() {
                     placeholder="e.g. account_reports"
                     disabled={testUseCustomCommand}
                   />
-                  <div>
-                    <label className="block text-[10px] text-muted font-bold uppercase mb-1">Test Tags</label>
-                    <input
-                      type="text"
-                      disabled={testUseCustomCommand}
-                      placeholder="e.g. account_reports"
-                      value={testTags}
-                      onChange={(e) => setTestTags(e.target.value)}
-                      className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-2 border border-border rounded outline-none text-primary min-h-[34px] focus:border-accent/70 font-mono disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                  </div>
+                  <ModuleSelector
+                    label="Update Module (-u)"
+                    modules={testUpdateModules}
+                    onChange={setTestUpdateModules}
+                    allModules={allModules}
+                    placeholder="e.g. account_reports"
+                    disabled={testUseCustomCommand}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-muted font-bold uppercase mb-1">Test Tags</label>
+                  <input
+                    type="text"
+                    disabled={testUseCustomCommand}
+                    placeholder="e.g. account_reports"
+                    value={testTags}
+                    onChange={(e) => setTestTags(e.target.value)}
+                    className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-2 border border-border rounded outline-none text-primary min-h-[34px] focus:border-accent/70 font-mono disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
                 </div>
 
                 <AddonsPathInput

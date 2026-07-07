@@ -87,6 +87,10 @@ function buildOdooCommand(opts: any): { execCmd: string; execArgs: string[]; ful
       args.push('-i');
       args.push(opts.moduleName);
     }
+    if (opts.updateModules) {
+      args.push('-u');
+      args.push(opts.updateModules);
+    }
     if (opts.testTags) {
       args.push(`--test-tags=${opts.testTags}`);
     }
