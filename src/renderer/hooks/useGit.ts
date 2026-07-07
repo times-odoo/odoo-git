@@ -214,6 +214,7 @@ export function useGit(repoPath: string | null) {
   const checkoutBranch = useCallback(
     async (branch: string) => {
       if (!repoPath) return;
+      setRepoState(repoPath, { checkingOutBranchName: branch });
       setLoading(repoPath, 'checkout', true);
       try {
         await window.git.checkout(repoPath, branch);
@@ -222,10 +223,11 @@ export function useGit(repoPath: string | null) {
       } catch (e) {
         handleError(e, 'Checkout');
       } finally {
+        setRepoState(repoPath, { checkingOutBranchName: null });
         setLoading(repoPath, 'checkout', false);
       }
     },
-    [repoPath, setLoading, addToast, refreshAll, handleError]
+    [repoPath, setLoading, setRepoState, addToast, refreshAll, handleError]
   );
 
   const createBranch = useCallback(

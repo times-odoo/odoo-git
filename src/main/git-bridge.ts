@@ -210,28 +210,33 @@ export async function getDiff(repoPath: string, opts?: { base?: string; staged?:
     args.push('--', opts.file);
   }
 
-  const numstatResult = await git.raw(args);
-  const files: any[] = [];
+  try {
+    const numstatResult = await git.raw(args);
+    const files: any[] = [];
 
-  if (numstatResult.trim()) {
-    for (const line of numstatResult.trim().split('\n')) {
-      const parts = line.split('\t');
-      if (parts.length >= 3) {
-        const insertions = parts[0] === '-' ? 0 : parseInt(parts[0], 10);
-        const deletions = parts[1] === '-' ? 0 : parseInt(parts[1], 10);
-        const file = parts[2];
-        files.push({
-          file,
-          binary: parts[0] === '-',
-          insertions,
-          deletions,
-          chunks: [],
-        });
+    if (numstatResult.trim()) {
+      for (const line of numstatResult.trim().split('\n')) {
+        const parts = line.split('\t');
+        if (parts.length >= 3) {
+          const insertions = parts[0] === '-' ? 0 : parseInt(parts[0], 10);
+          const deletions = parts[1] === '-' ? 0 : parseInt(parts[1], 10);
+          const file = parts[2];
+          files.push({
+            file,
+            binary: parts[0] === '-',
+            insertions,
+            deletions,
+            chunks: [],
+          });
+        }
       }
     }
-  }
 
-  return files;
+    return files;
+  } catch (e) {
+    console.warn(`[git-bridge] git diff failed for ${repoPath}:`, e);
+    return [];
+  }
 }
 
 export async function getDiffRaw(repoPath: string, args: string[]) {

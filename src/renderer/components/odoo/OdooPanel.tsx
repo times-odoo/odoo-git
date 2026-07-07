@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRepoStore } from '../../store/repos';
 import { useGitStore } from '../../store/git';
 import { useUIStore } from '../../store/ui';
@@ -9,6 +9,159 @@ import { useGit } from '../../hooks/useGit';
 const stripAnsi = (str: string) => {
   return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
 };
+
+const ODOO_LOG_REGEX = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\s+(\d+)\s+(INFO|WARNING|ERROR|DEBUG|CRITICAL)\s+(\S+)\s+([\w\.\-]+):\s*(.*)$/;
+const WERKZEUG_REGEX = /^([\d\.]+) - - \[(.*?)\] "(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH) (.*?) HTTP\/[0-9\.]+" (\d{3}) (.*)$/;
+
+const getLevelClass = (level: string) => {
+  switch (level) {
+    case 'INFO': return 'text-emerald-400';
+    case 'WARNING': return 'text-amber-400';
+    case 'ERROR':
+    case 'CRITICAL': return 'text-rose-400 font-semibold';
+    case 'DEBUG': return 'text-purple-400';
+    default: return 'text-primary/75';
+  }
+};
+
+const getStatusClass = (statusStr: string) => {
+  const code = parseInt(statusStr, 10);
+  if (code >= 200 && code < 300) return 'text-emerald-400 font-semibold';
+  if (code >= 300 && code < 400) return 'text-sky-300';
+  if (code >= 400 && code < 500) return 'text-amber-400 font-semibold';
+  if (code >= 500) return 'text-rose-500 font-bold';
+  return 'text-muted';
+};
+
+const getMethodClass = (method: string) => {
+  switch (method) {
+    case 'GET': return 'text-sky-400 font-semibold';
+    case 'POST': return 'text-teal-400 font-semibold';
+    case 'PUT':
+    case 'PATCH': return 'text-purple-400 font-semibold';
+    case 'DELETE': return 'text-rose-500 font-semibold';
+    default: return 'text-yellow-400 font-semibold';
+  }
+};
+
+const renderFormattedMessage = (logger: string, message: string) => {
+  if (logger === 'werkzeug') {
+    const match = message.match(WERKZEUG_REGEX);
+    if (match) {
+      const [_, ip, time, method, path, status, rest] = match;
+      return (
+        <span className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-muted/50 select-none shrink-0">{ip}</span>
+          <span className="text-muted/40 select-none shrink-0">[{time}]</span>
+          <span className={`${getMethodClass(method)} shrink-0`}>"{method}</span>
+          <span className="text-primary break-all">{path} HTTP/1.1"</span>
+          <span className={`${getStatusClass(status)} shrink-0`}>{status}</span>
+          <span className="text-muted/65 break-all">{rest}</span>
+        </span>
+      );
+    }
+  }
+  
+  if (message.toLowerCase().includes('deprecated') || message.toLowerCase().includes('warning')) {
+    return <span className="text-amber-300/90">{message}</span>;
+  }
+  if (message.toLowerCase().includes('fail') || message.toLowerCase().includes('error')) {
+    return <span className="text-rose-300/90">{message}</span>;
+  }
+
+  return <span>{message}</span>;
+};
+
+const TerminalLine = React.memo(({ line }: { line: string }) => {
+  if (!line.trim()) {
+    return <div className="h-4" />;
+  }
+
+  const match = line.match(ODOO_LOG_REGEX);
+  if (!match) {
+    // 1. (Pdb) prompt
+    if (line.trim() === '(Pdb)') {
+      return (
+        <div className="font-mono text-[11px] py-[1.5px] text-teal-400 font-bold tracking-wider select-none">
+          (Pdb)
+        </div>
+      );
+    }
+
+    // 2. Python File/Line breakpoint location: > /path/to/file.py(123)func_name()
+    const dbgMatch = line.match(/^>\s*(\/.*?\.py)\((\d+)\)(.*)$/);
+    if (dbgMatch) {
+      const [_, filePath, lineNum, funcName] = dbgMatch;
+      return (
+        <div className="font-mono text-[11px] py-[2px] border-b border-border/5 text-slate-350 leading-relaxed select-text">
+          <span className="text-teal-400 font-bold mr-1">&gt;</span>
+          <span className="text-teal-300 font-semibold hover:underline" title={filePath}>{filePath}</span>
+          <span className="text-muted/40 font-semibold">(</span>
+          <span className="text-amber-400 font-bold">{lineNum}</span>
+          <span className="text-muted/40 font-semibold">)</span>
+          <span className="text-sky-300 font-medium pl-1">{funcName}</span>
+        </div>
+      );
+    }
+
+    // 3. User command entered (starts with "> ")
+    if (line.startsWith('> ')) {
+      const command = line.substring(2);
+      return (
+        <div className="font-mono text-[11px] py-[1.5px] leading-relaxed select-text text-slate-200">
+          <span className="text-teal-400 font-bold select-none">&gt; </span>
+          <span className="font-semibold text-slate-100">{command}</span>
+        </div>
+      );
+    }
+
+    // 4. Code lines under debugger: ->  source_code
+    if (line.trim().startsWith('->')) {
+      return (
+        <div className="font-mono text-[11px] py-[1.5px] text-yellow-250/90 font-medium pl-4 select-text leading-relaxed">
+          {line}
+        </div>
+      );
+    }
+
+    // Default formatting for other outputs (tracebacks, general outputs, pdb stdout)
+    let colorClass = 'text-slate-300/95';
+    if (line.toLowerCase().includes('traceback') || line.startsWith('  File "')) {
+      colorClass = 'text-rose-400/90';
+    } else if (line.toLowerCase().includes('error') || line.toLowerCase().includes('exception')) {
+      colorClass = 'text-rose-400 font-semibold';
+    } else if (line.toLowerCase().includes('warning')) {
+      colorClass = 'text-amber-300/90';
+    } else if (line.startsWith('[App]')) {
+      colorClass = 'text-sky-400 font-semibold';
+    }
+    
+    return (
+      <div className={`font-mono text-[11px] py-[1px] leading-relaxed break-all whitespace-pre-wrap ${colorClass} select-text`}>
+        {line}
+      </div>
+    );
+  }
+
+  const [_, timestamp, pid, level, db, logger, message] = match;
+
+  return (
+    <div className="font-mono text-[11px] py-[1.5px] border-b border-border/5 hover:bg-white/5 transition-colors leading-relaxed break-all whitespace-pre-wrap select-text">
+      <span className="text-muted/40 select-none mr-2">{timestamp}</span>
+      <span className="text-blue-400/40 select-none mr-1.5 font-light">[{pid}]</span>
+      <span className={`mr-2 font-semibold ${getLevelClass(level)}`}>
+        {level}
+      </span>
+      <span className="text-cyan-400/60 mr-2 font-medium">[{db}]</span>
+      <span className="text-amber-400/60 mr-1.5 font-medium">{logger}:</span>
+      <span className="text-primary/90 pl-0.5">
+        {renderFormattedMessage(logger, message)}
+      </span>
+    </div>
+  );
+});
+
+TerminalLine.displayName = 'TerminalLine';
 
 interface ModuleSelectorProps {
   label: string;
@@ -157,14 +310,14 @@ export function ModuleSelector({ label, modules, onChange, allModules, placehold
   );
 }
 
-interface AddonPathCardProps {
+interface AddonPathRowProps {
   path: string;
   absPath: string;
   onRemove: () => void;
   disabled?: boolean;
 }
 
-function AddonPathCard({ path, absPath, onRemove, disabled = false }: AddonPathCardProps) {
+function AddonPathRow({ path, absPath, onRemove, disabled = false }: AddonPathRowProps) {
   const repos = useRepoStore((s) => s.repos);
   const repoStates = useGitStore((s) => s.repoStates);
 
@@ -184,6 +337,9 @@ function AddonPathCard({ path, absPath, onRemove, disabled = false }: AddonPathC
   const branchesList = repoState?.branches?.local || [];
   const isPulling = repoState?.loading.pull;
   const isCheckingOut = repoState?.loading.checkout;
+  const checkingOutBranchName = repoState?.checkingOutBranchName || null;
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   useEffect(() => {
     if (repoPath) {
@@ -199,41 +355,38 @@ function AddonPathCard({ path, absPath, onRemove, disabled = false }: AddonPathC
   };
 
   return (
-    <div className="flex flex-col gap-2 p-2.5 bg-[#161B22]/50 border border-border/60 rounded-md relative hover:border-border transition-colors">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex flex-col min-w-0">
-          <span className="text-[12px] font-semibold text-primary truncate">
-            {matchedRepo ? matchedRepo.name : path.split('/').pop() || path}
-          </span>
-          <span className="text-[10px] text-muted truncate font-mono" title={absPath}>
+    <div className={`flex items-center justify-between gap-3 py-1.5 px-3 hover:bg-[#161B22]/40 transition-colors first:rounded-t-md last:rounded-b-md relative ${
+      isDropdownOpen ? 'z-[50]' : 'z-auto'
+    }`}>
+      <div className="flex items-center gap-2 min-w-0 flex-1">
+        {!disabled && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="text-muted hover:text-danger hover:scale-110 transition-all font-bold text-[16px] leading-none shrink-0"
+            title="Remove path"
+          >
+            ×
+          </button>
+        )}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[12px] font-mono text-primary truncate" title={absPath}>
             {path}
           </span>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
           {matchedRepo ? (
-            <span className="bg-success/10 text-success text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border border-success/20">
-              git repo
+            <span className="text-[8px] text-success/80 font-semibold bg-success/5 px-1 rounded border border-success/10 uppercase tracking-wider shrink-0">
+              git
             </span>
           ) : (
-            <span className="bg-muted/10 text-muted text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border border-muted/20">
-              local dir
+            <span className="text-[8px] text-muted font-semibold bg-muted/10 px-1 rounded border border-muted/15 uppercase tracking-wider shrink-0">
+              local
             </span>
-          )}
-          {!disabled && (
-            <button
-              type="button"
-              onClick={onRemove}
-              className="text-muted hover:text-danger hover:scale-110 transition-all font-bold text-[16px] leading-none p-0.5 ml-0.5"
-              title="Remove path"
-            >
-              ×
-            </button>
           )}
         </div>
       </div>
 
       {matchedRepo && (
-        <div className="flex items-center gap-2 mt-1">
+        <div className="flex items-center gap-2 shrink-0 w-[320px]">
           <div className="flex-1 min-w-0">
             <Dropdown
               options={branchesList.map((b) => b.name)}
@@ -243,13 +396,16 @@ function AddonPathCard({ path, absPath, onRemove, disabled = false }: AddonPathC
               size="sm"
               searchable={true}
               placeholder="Select branch..."
+              onOpenChange={setIsDropdownOpen}
+              loading={isCheckingOut}
+              loadingLabel={checkingOutBranchName || undefined}
             />
           </div>
           <button
             type="button"
             onClick={handlePull}
             disabled={disabled || isCheckingOut || isPulling || !currentBranch}
-            className="btn-accent py-1 px-2.5 h-[24px] text-[11px] font-medium shrink-0 flex items-center justify-center gap-1"
+            className="btn-accent py-0.5 px-2 h-[24px] text-[10px] font-semibold shrink-0 flex items-center justify-center gap-1"
           >
             {isPulling ? (
               <>
@@ -260,8 +416,8 @@ function AddonPathCard({ path, absPath, onRemove, disabled = false }: AddonPathC
               </>
             ) : (
               <>
-                <svg className="w-3 h-3 text-accent shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 13l-7 7-7-7m14-6l-7 7-7-7" />
+                <svg className="w-3.5 h-3.5 text-accent shrink-0" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 4V12M5 9L8 12L11 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 <span>Pull</span>
               </>
@@ -273,29 +429,44 @@ function AddonPathCard({ path, absPath, onRemove, disabled = false }: AddonPathC
   );
 }
 
-interface AddonsPathManagerProps {
+interface AddonsPathInputProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
 }
 
-function AddonsPathManager({ label, value, onChange, disabled = false }: AddonsPathManagerProps) {
-  const repos = useRepoStore((s) => s.repos);
-  const activeRepoPath = useRepoStore((s) => s.activeRepoPath);
+function AddonsPathInput({ label, value, onChange, disabled = false }: AddonsPathInputProps) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="block text-[10px] text-muted font-bold uppercase mb-1">{label}</label>
+      <input
+        type="text"
+        disabled={disabled}
+        className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-3 border border-border rounded outline-none font-mono text-primary min-h-[34px] focus:border-accent/70 disabled:opacity-50 disabled:cursor-not-allowed"
+        placeholder="e.g. addons,../enterprise"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
 
-  const [inputValue, setInputValue] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [focusedIndex, setFocusedIndex] = useState(-1);
+interface AddonPathRowsListProps {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  communityRepoPath: string;
+}
 
-  // Helper to resolve relative path to absolute
+function AddonPathRowsList({ value, onChange, disabled = false, communityRepoPath }: AddonPathRowsListProps) {
   const getAbsPath = (pathStr: string) => {
     if (!pathStr) return '';
     if (pathStr.startsWith('/') || pathStr.match(/^[a-zA-Z]:\\/)) {
       return pathStr;
     }
-    if (!activeRepoPath) return pathStr;
-    const baseParts = activeRepoPath.split('/').filter(Boolean);
+    if (!communityRepoPath) return pathStr;
+    const baseParts = communityRepoPath.split('/').filter(Boolean);
     const relParts = pathStr.split('/').filter(Boolean);
     for (const part of relParts) {
       if (part === '..') {
@@ -311,123 +482,25 @@ function AddonsPathManager({ label, value, onChange, disabled = false }: AddonsP
     return value.split(',').map((s) => s.trim()).filter(Boolean);
   }, [value]);
 
-  const query = inputValue.trim().toLowerCase();
-
-  // Suggestions are repositories paths in the workspace that are not already added
-  const suggestions = useMemo(() => {
-    return repos.map(r => r.path);
-  }, [repos]);
-
-  const filteredSuggestions = query
-    ? suggestions
-        .filter(p => 
-          p.toLowerCase().includes(query) && 
-          !pathList.some(exist => getAbsPath(exist).toLowerCase() === p.toLowerCase())
-        )
-        .slice(0, 15)
-    : suggestions.filter(p => 
-        !pathList.some(exist => getAbsPath(exist).toLowerCase() === p.toLowerCase())
-      ).slice(0, 15);
-
-  const addPath = (newPath: string) => {
-    if (disabled) return;
-    const trimmed = newPath.trim();
-    if (trimmed && !pathList.includes(trimmed)) {
-      const newList = [...pathList, trimmed];
-      onChange(newList.join(','));
-    }
-    setInputValue('');
-    setFocusedIndex(-1);
-    setShowSuggestions(false);
-  };
-
-  const removePath = (targetPath: string) => {
+  const handleRemovePath = (targetPath: string) => {
     if (disabled) return;
     const newList = pathList.filter((p) => p !== targetPath);
     onChange(newList.join(','));
   };
 
+  if (pathList.length === 0) return null;
+
   return (
-    <div className="space-y-2 relative">
-      <div className="relative">
-        <label className="block text-[10px] text-muted font-bold uppercase mb-1">{label}</label>
-        <div className={`flex flex-wrap items-center gap-1.5 p-1.5 bg-[#0D1117]/60 border border-border rounded focus-within:border-accent/70 transition-colors w-full min-h-[34px] ${
-          disabled ? 'opacity-50 cursor-not-allowed pointer-events-none bg-[#0D1117]/30' : 'cursor-text'
-        }`}>
-          <input
-            type="text"
-            disabled={disabled}
-            className="bg-transparent border-none outline-none flex-1 min-w-[200px] text-primary text-[12px] font-mono p-0 h-[20px] disabled:cursor-not-allowed"
-            placeholder="Search repo paths or paste custom path..."
-            value={inputValue}
-            onChange={(e) => {
-              if (disabled) return;
-              setInputValue(e.target.value);
-              setShowSuggestions(true);
-              setFocusedIndex(-1);
-            }}
-            onFocus={() => setShowSuggestions(true)}
-            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowDown') {
-                if (filteredSuggestions.length > 0) {
-                  e.preventDefault();
-                  setFocusedIndex(prev => (prev + 1) % filteredSuggestions.length);
-                }
-              } else if (e.key === 'ArrowUp') {
-                if (filteredSuggestions.length > 0) {
-                  e.preventDefault();
-                  setFocusedIndex(prev => (prev - 1 + filteredSuggestions.length) % filteredSuggestions.length);
-                }
-              } else if (e.key === 'Enter') {
-                e.preventDefault();
-                if (focusedIndex >= 0 && focusedIndex < filteredSuggestions.length) {
-                  addPath(filteredSuggestions[focusedIndex]);
-                } else if (inputValue.trim()) {
-                  addPath(inputValue.trim());
-                }
-              } else if (e.key === 'Escape') {
-                setShowSuggestions(false);
-                setFocusedIndex(-1);
-              }
-            }}
-          />
-        </div>
-
-        {showSuggestions && filteredSuggestions.length > 0 && (
-          <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-[#1C2129] border border-border rounded shadow-xl z-[9999] py-1">
-            {filteredSuggestions.map((suggestion, index) => {
-              const repoName = repos.find(r => r.path === suggestion)?.name || suggestion;
-              return (
-                <div
-                  key={suggestion}
-                  className={`px-3 py-1.5 font-mono text-[12px] cursor-pointer transition-colors flex justify-between items-center ${
-                    index === focusedIndex ? 'bg-accent/20 text-accent font-semibold' : 'text-primary hover:bg-border/30'
-                  }`}
-                  onClick={() => addPath(suggestion)}
-                >
-                  <span className="truncate font-semibold text-primary">{repoName}</span>
-                  <span className="text-[10px] text-muted truncate ml-2 max-w-[60%] font-mono">{suggestion}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {pathList.length > 0 && (
-        <div className="grid grid-cols-2 gap-2.5 mt-2">
-          {pathList.map((path) => (
-            <AddonPathCard
-              key={path}
-              path={path}
-              absPath={getAbsPath(path)}
-              onRemove={() => removePath(path)}
-              disabled={disabled}
-            />
-          ))}
-        </div>
-      )}
+    <div className="border border-border/50 rounded-md bg-[#161B22]/10 divide-y divide-border/40">
+      {pathList.map((path) => (
+        <AddonPathRow
+          key={path}
+          path={path}
+          absPath={getAbsPath(path)}
+          onRemove={() => handleRemovePath(path)}
+          disabled={disabled}
+        />
+      ))}
     </div>
   );
 }
@@ -435,6 +508,7 @@ function AddonsPathManager({ label, value, onChange, disabled = false }: AddonsP
 export function OdooPanel() {
   const repos = useRepoStore((s) => s.repos);
   const activeRepoPath = useRepoStore((s) => s.activeRepoPath);
+  const repoStates = useGitStore((s) => s.repoStates);
 
   // Compute community repo path (must contain 'odoo' and not 'enterprise', 'theme', 'design')
   const communityRepoPath = useMemo(() => {
@@ -474,6 +548,24 @@ export function OdooPanel() {
   const [serverStatus, setServerStatus] = useState<'starting' | 'running' | 'stopped'>('stopped');
   const [runningCmd, setRunningCmd] = useState('');
   const [logs, setLogs] = useState<string[]>([]);
+  const [stdinInput, setStdinInput] = useState('');
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [tempInput, setTempInput] = useState('');
+  const [leftWidth, setLeftWidth] = useState(45);
+  const [isTerminalMaximized, setIsTerminalMaximized] = useState(false);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+  const processedLines = useMemo(() => {
+    const lines: string[] = [];
+    logs.forEach((log) => {
+      const parts = log.split('\n');
+      parts.forEach((part, idx) => {
+        if (idx === parts.length - 1 && part === '') return;
+        lines.push(part);
+      });
+    });
+    return lines;
+  }, [logs]);
   const [activeTab, setActiveTab] = useState<'run' | 'upgrade' | 'test'>('run');
 
   // Creation/Duplication Modals
@@ -582,6 +674,26 @@ export function OdooPanel() {
     return localStorage.getItem('odoo_upCustomCommand') ?? '';
   });
 
+  // Combined upgrade and addons path list for branch dropdown/pull rows
+  const upCombinedPaths = useMemo(() => {
+    return [upUpgradePaths, upAddons].filter(Boolean).join(',');
+  }, [upUpgradePaths, upAddons]);
+
+  const handleUpCombinedChange = useCallback((newVal: string) => {
+    const newPathsList = newVal.split(',').map(s => s.trim()).filter(Boolean);
+    const origUpgradeList = upUpgradePaths.split(',').map(s => s.trim()).filter(Boolean);
+    const origAddonsList = upAddons.split(',').map(s => s.trim()).filter(Boolean);
+
+    const nextUpgradeList = origUpgradeList.filter(p => newPathsList.includes(p));
+    const nextAddonsList = origAddonsList.filter(p => newPathsList.includes(p));
+
+    setUpUpgradePaths(nextUpgradeList.join(','));
+    setUpAddons(nextAddonsList.join(','));
+
+    localStorage.setItem('odoo_upUpgradePaths', nextUpgradeList.join(','));
+    localStorage.setItem('odoo_upAddons', nextAddonsList.join(','));
+  }, [upUpgradePaths, upAddons]);
+
   // Test Form
   const [testAddons, setTestAddons] = useState(() => {
     return localStorage.getItem('odoo_testAddons') ?? 'addons,../enterprise';
@@ -688,9 +800,25 @@ export function OdooPanel() {
     testCustomArgs?: string;
     testUseCustomCommand?: boolean;
     testCustomCommand?: string;
+    branches?: Record<string, string>;
   }
 
   const defaultPresets: OdooPreset[] = [
+    {
+      name: 'Odoo 16.0 Default Run',
+      odooVersion: '16.0',
+      activeTab: 'run',
+      runPort: 8069,
+      runDbName: '',
+      runInterface: '127.0.0.1',
+      runAddons: 'addons,../enterprise',
+      runInstallModules: [],
+      runUpdateModules: [],
+      runDevAll: true,
+      runWithDemo: false,
+      runStopAfterInit: false,
+      runCustomArgs: '',
+    },
     {
       name: 'Odoo 17.0 Default Run',
       odooVersion: '17.0',
@@ -1023,6 +1151,27 @@ export function OdooPanel() {
       localStorage.setItem('odoo_testCustomCommand', preset.testCustomCommand);
     }
 
+    if (preset.branches) {
+      Object.entries(preset.branches).forEach(async ([path, branchName]) => {
+        try {
+          useGitStore.getState().setRepoState(path, { checkingOutBranchName: branchName });
+          useGitStore.getState().setLoading(path, 'checkout', true);
+          await window.git.checkout(path, branchName);
+          const [status, branches] = await Promise.all([
+            window.git.status(path),
+            window.git.branches(path)
+          ]);
+          useGitStore.getState().setRepoState(path, { status, branches });
+        } catch (e) {
+          console.error(`Failed to checkout branch ${branchName} for ${path}:`, e);
+          addToast({ message: `Failed to switch ${path.split('/').pop()} to ${branchName}`, type: 'error' });
+        } finally {
+          useGitStore.getState().setRepoState(path, { checkingOutBranchName: null });
+          useGitStore.getState().setLoading(path, 'checkout', false);
+        }
+      });
+    }
+
     addToast({ type: 'success', message: `Preset "${presetName}" applied.` });
   };
 
@@ -1042,6 +1191,14 @@ export function OdooPanel() {
     if (allPresets.some((p) => p.name.toLowerCase() === finalName.toLowerCase())) {
       addToast({ type: 'error', message: 'A preset with this name already exists.' });
       return;
+    }
+
+    const branchesMap: Record<string, string> = {};
+    for (const r of repos) {
+      const curBranch = repoStates[r.path]?.status?.current;
+      if (curBranch) {
+        branchesMap[r.path] = curBranch;
+      }
     }
 
     const newPreset: OdooPreset = {
@@ -1082,6 +1239,7 @@ export function OdooPanel() {
       testCustomArgs,
       testUseCustomCommand,
       testCustomCommand,
+      branches: branchesMap,
     };
 
     const updated = [...customPresets, newPreset];
@@ -1095,6 +1253,14 @@ export function OdooPanel() {
 
   const handleUpdateCurrentPreset = () => {
     if (!selectedPresetName) return;
+
+    const branchesMap: Record<string, string> = {};
+    for (const r of repos) {
+      const curBranch = repoStates[r.path]?.status?.current;
+      if (curBranch) {
+        branchesMap[r.path] = curBranch;
+      }
+    }
 
     const updatedPreset: OdooPreset = {
       name: selectedPresetName,
@@ -1135,6 +1301,7 @@ export function OdooPanel() {
       testCustomArgs,
       testUseCustomCommand,
       testCustomCommand,
+      branches: branchesMap,
     };
 
     const index = customPresets.findIndex((p) => p.name === selectedPresetName);
@@ -1598,6 +1765,88 @@ export function OdooPanel() {
     }
   };
 
+  const handleSendStdin = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const enteredText = stdinInput;
+    setLogs((prev) => [...prev, `> ${enteredText}\n`]);
+    setStdinInput('');
+
+    if (enteredText.trim()) {
+      setCommandHistory((prev) => {
+        if (prev.length > 0 && prev[prev.length - 1] === enteredText) {
+          setHistoryIndex(prev.length);
+          return prev;
+        }
+        const nextHistory = [...prev, enteredText];
+        setHistoryIndex(nextHistory.length);
+        return nextHistory;
+      });
+    } else {
+      setHistoryIndex(commandHistory.length);
+    }
+
+    try {
+      await window.odoo.writeStdin(enteredText + '\n');
+    } catch (err: any) {
+      addToast({ type: 'error', message: `Failed to send input: ${err.message}` });
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (commandHistory.length === 0) return;
+
+      let nextIndex = historyIndex;
+      if (historyIndex === commandHistory.length || historyIndex === -1) {
+        setTempInput(stdinInput);
+        nextIndex = commandHistory.length - 1;
+      } else if (historyIndex > 0) {
+        nextIndex = historyIndex - 1;
+      } else {
+        return;
+      }
+
+      setHistoryIndex(nextIndex);
+      setStdinInput(commandHistory[nextIndex]);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (historyIndex === -1 || historyIndex === commandHistory.length) return;
+
+      const nextIndex = historyIndex + 1;
+      setHistoryIndex(nextIndex);
+
+      if (nextIndex === commandHistory.length) {
+        setStdinInput(tempInput);
+      } else {
+        setStdinInput(commandHistory[nextIndex]);
+      }
+    }
+  };
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = leftWidth;
+    const containerWidth = splitContainerRef.current?.getBoundingClientRect().width || 1;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaPercent = (deltaX / containerWidth) * 100;
+      const newWidth = Math.min(Math.max(startWidth + deltaPercent, 30), 70);
+      setLeftWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [leftWidth]);
+
   // Run Server Execution Trigger
   const handleStartServer = async () => {
     if (!communityRepoPath) return;
@@ -1845,9 +2094,11 @@ export function OdooPanel() {
       </div>
 
       {/* Main Split Section */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left Side: Command Preview and Server Logs Terminal */}
-        <div className="w-[45%] flex flex-col border-r border-border h-full bg-surface/10 overflow-hidden">
+      <div ref={splitContainerRef} className="flex flex-1 overflow-hidden">
+        <div
+          style={{ width: isTerminalMaximized ? '100%' : `${leftWidth}%` }}
+          className="flex flex-col border-r border-border h-full bg-surface/10 overflow-hidden shrink-0"
+        >
           {/* Command Preview bar */}
           <div className="px-4 py-3 border-b border-border bg-surface/20 shrink-0">
             <div className="space-y-1.5">
@@ -1865,6 +2116,27 @@ export function OdooPanel() {
             <div className="px-3 py-2 bg-slate-900 border-b border-border/40 flex items-center justify-between shrink-0">
               <span className="text-slate-400 font-bold uppercase text-[9px]">Server Logs Terminal</span>
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsTerminalMaximized(!isTerminalMaximized)}
+                  className="text-slate-400 hover:text-white text-[9px] transition-colors flex items-center gap-1 border border-slate-700/60 rounded px-1.5 py-0.5 bg-slate-800/40 hover:bg-slate-800"
+                  title={isTerminalMaximized ? "Exit full screen" : "Maximize terminal"}
+                >
+                  {isTerminalMaximized ? (
+                    <>
+                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3 3m12 6V4.5M15 9h4.5M15 9l6-6m-6 15v4.5M15 15h4.5M15 15l6 6m-6-6v4.5M9 15H4.5M9 15l-6 6"></path>
+                      </svg>
+                      <span>Exit Full Screen</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75v4.5m0-4.5h-4.5m4.5 0L15 9m5.25 11.25v-4.5m0 4.5h-4.5m4.5 0L15 15"></path>
+                      </svg>
+                      <span>Full Screen</span>
+                    </>
+                  )}
+                </button>
                 <button
                   onClick={handleOpenExternalTerminal}
                   className="text-slate-400 hover:text-white text-[9px] transition-colors flex items-center gap-1 border border-slate-700/60 rounded px-1.5 py-0.5 bg-slate-800/40 hover:bg-slate-800"
@@ -1893,18 +2165,59 @@ export function OdooPanel() {
               </div>
             </div>
             <div className="flex-1 overflow-auto p-2.5 selection:bg-slate-700 select-text leading-tight whitespace-pre-wrap">
-              {logs.length === 0 ? (
+              {processedLines.length === 0 ? (
                 <div className="text-slate-500 italic py-4 text-center">No terminal logs recorded yet. Start server to stream output.</div>
               ) : (
-                logs.map((log, idx) => <div key={idx}>{log}</div>)
+                processedLines.map((line, idx) => <TerminalLine key={idx} line={line} />)
               )}
               <div ref={terminalEndRef} />
             </div>
+
+            {/* Stdin Input Bar */}
+            {serverStatus === 'running' && (
+              <form
+                onSubmit={handleSendStdin}
+                className="flex items-center gap-2 px-3 py-1.5 border-t border-border/20 bg-slate-950/80 shrink-0"
+              >
+                <span className="text-accent font-semibold text-[11px] select-none shrink-0">&gt;</span>
+                <input
+                  type="text"
+                  value={stdinInput}
+                  onChange={(e) => setStdinInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type input here and press Enter to send to process (e.g. for pdb breakpoint)..."
+                  className="flex-1 bg-transparent border-none text-[11px] font-mono text-slate-100 focus:outline-none focus:ring-0 p-0 placeholder:text-slate-600"
+                />
+                <button
+                  type="submit"
+                  className="btn-accent w-[20px] h-[20px] p-0 flex items-center justify-center rounded shrink-0"
+                  title="Send input to process (Enter)"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"></path>
+                  </svg>
+                </button>
+              </form>
+            )}
           </div>
         </div>
 
+        {/* Resizable Divider Handle */}
+        {!isTerminalMaximized && (
+          <div
+            onMouseDown={handleMouseDown}
+            className="w-[4px] hover:w-[6px] bg-border hover:bg-accent cursor-col-resize transition-all h-full shrink-0 relative z-[99] active:bg-accent"
+          />
+        )}
+
         {/* Right Side: Virtual Environment + Server controls & Console */}
-        <div className="w-[55%] flex flex-col h-full overflow-hidden bg-bg">
+        <div
+          style={{
+            width: isTerminalMaximized ? '0%' : `${100 - leftWidth}%`,
+            display: isTerminalMaximized ? 'none' : 'flex',
+          }}
+          className="flex flex-col h-full overflow-hidden bg-bg shrink-0"
+        >
           {/* Virtual Environment Selector & Preset Manager */}
           <div className="p-3 border-b border-border bg-surface/20 flex flex-col gap-3 shrink-0">
             {/* Presets section — comes first */}
@@ -2082,13 +2395,19 @@ export function OdooPanel() {
                       className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-3 border border-border rounded outline-none text-primary min-h-[36px] focus:border-accent/70 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
+                  <AddonsPathInput
+                    label="Addons Path"
+                    value={runAddons}
+                    onChange={setRunAddons}
+                    disabled={runUseCustomCommand}
+                  />
                 </div>
 
-                <AddonsPathManager
-                  label="Addons Path"
+                <AddonPathRowsList
                   value={runAddons}
                   onChange={setRunAddons}
                   disabled={runUseCustomCommand}
+                  communityRepoPath={communityRepoPath}
                 />
 
                 <div className="grid grid-cols-2 gap-3">
@@ -2216,11 +2535,18 @@ export function OdooPanel() {
                   </div>
                 </div>
 
-                <AddonsPathManager
+                <AddonsPathInput
                   label="Addons Path"
                   value={upAddons}
                   onChange={setUpAddons}
                   disabled={upUseCustomCommand}
+                />
+
+                <AddonPathRowsList
+                  value={upCombinedPaths}
+                  onChange={handleUpCombinedChange}
+                  disabled={upUseCustomCommand}
+                  communityRepoPath={communityRepoPath}
                 />
 
                 <ModuleSelector
@@ -2366,11 +2692,18 @@ export function OdooPanel() {
                   </div>
                 </div>
 
-                <AddonsPathManager
+                <AddonsPathInput
                   label="Addons Path"
                   value={testAddons}
                   onChange={setTestAddons}
                   disabled={testUseCustomCommand}
+                />
+
+                <AddonPathRowsList
+                  value={testAddons}
+                  onChange={setTestAddons}
+                  disabled={testUseCustomCommand}
+                  communityRepoPath={communityRepoPath}
                 />
 
                 <div className="flex items-center gap-4 py-1">

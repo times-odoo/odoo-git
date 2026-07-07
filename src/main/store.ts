@@ -13,6 +13,7 @@ interface StoreSchema {
   githubPat: string;
   githubUsername: string;
   pendingDbs: string[];
+  odooRootDir: string;
 }
 
 const store = new Store<StoreSchema>({
@@ -26,6 +27,7 @@ const store = new Store<StoreSchema>({
     githubPat: '',
     githubUsername: '',
     pendingDbs: [],
+    odooRootDir: '',
   },
 });
 
@@ -37,6 +39,7 @@ export function getSettings() {
     lastActiveRepo: store.get('lastActiveRepo'),
     githubPat: store.get('githubPat'),
     githubUsername: store.get('githubUsername'),
+    odooRootDir: store.get('odooRootDir'),
   };
 }
 

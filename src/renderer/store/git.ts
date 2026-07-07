@@ -24,6 +24,7 @@ interface PerRepoState {
     pull: boolean;
     createBranch: boolean;
   };
+  checkingOutBranchName: string | null;
   error: string | null;
 }
 
@@ -50,6 +51,7 @@ const defaultRepoState: PerRepoState = {
     pull: false,
     createBranch: false,
   },
+  checkingOutBranchName: null,
   error: null,
 };
 

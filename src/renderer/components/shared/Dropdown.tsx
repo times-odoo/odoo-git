@@ -15,6 +15,9 @@ interface DropdownProps {
   searchable?: boolean;
   disabled?: boolean;
   size?: 'sm' | 'md';
+  onOpenChange?: (open: boolean) => void;
+  loading?: boolean;
+  loadingLabel?: string;
 }
 
 export function Dropdown({
@@ -26,6 +29,9 @@ export function Dropdown({
   searchable = false,
   disabled = false,
   size = 'md',
+  onOpenChange,
+  loading = false,
+  loadingLabel = 'Loading...',
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -69,6 +75,10 @@ export function Dropdown({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    onOpenChange?.(isOpen);
+  }, [isOpen, onOpenChange]);
+
   const filteredOptions = normalizedOptions.filter((opt) =>
     opt.label.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -82,29 +92,36 @@ export function Dropdown({
       {/* Dropdown Trigger */}
       <button
         type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled || loading}
+        onClick={() => !(disabled || loading) && setIsOpen(!isOpen)}
         className={`flex items-center justify-between w-full bg-bg border border-border rounded text-left transition-all h-full ${
           size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1.5 text-[13px]'
         } ${
-          disabled
+          disabled || loading
             ? 'opacity-50 cursor-not-allowed bg-[#0D1117]/30 text-muted'
             : 'cursor-pointer hover:border-accent/50 focus:border-accent focus:outline-none'
         }`}
       >
-        <span className="truncate text-primary">
-          {selectedOption ? selectedOption.label : placeholder}
+        <span className="truncate text-primary flex items-center gap-1.5">
+          {loading && (
+            <svg className="animate-spin text-accent shrink-0" width="10" height="10" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="20 12" />
+            </svg>
+          )}
+          {loading ? loadingLabel : (selectedOption ? selectedOption.label : placeholder)}
         </span>
-        <svg
-          className={`w-3.5 h-3.5 text-muted transition-transform duration-200 shrink-0 ml-1.5 ${
-            isOpen ? 'rotate-180 text-accent' : ''
-          }`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-        </svg>
+        {!loading && (
+          <svg
+            className={`w-3.5 h-3.5 text-muted transition-transform duration-200 shrink-0 ml-1.5 ${
+              isOpen ? 'rotate-180 text-accent' : ''
+            }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
       </button>
 
       {/* Dropdown Options List */}

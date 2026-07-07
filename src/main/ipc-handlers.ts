@@ -444,6 +444,37 @@ export function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('app:listDirectories', async (_e, rootPath: string) => {
+    try {
+      if (!rootPath || !fs.existsSync(rootPath)) return [];
+      const stats = fs.statSync(rootPath);
+      if (!stats.isDirectory()) return [];
+
+      const result: string[] = [];
+      const scanDir = (dir: string, depth: number) => {
+        if (depth > 2) return;
+        try {
+          const files = fs.readdirSync(dir);
+          for (const file of files) {
+            if (file.startsWith('.') || file === 'node_modules' || file === '.git') continue;
+            const fullPath = path.join(dir, file);
+            try {
+              if (fs.statSync(fullPath).isDirectory()) {
+                result.push(fullPath);
+                scanDir(fullPath, depth + 1);
+              }
+            } catch {}
+          }
+        } catch {}
+      };
+      
+      scanDir(rootPath, 1);
+      return result;
+    } catch {
+      return [];
+    }
+  });
+
   ipcMain.handle('app:getOdooModules', async (_e, repoPath: string) => {
     try {
       const modules = new Set<string>();
@@ -847,6 +878,19 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('odoo:getServerStatus', () => {
     return { status: odooStatus, cmd: currentCmd };
+  });
+
+  ipcMain.handle('odoo:writeStdin', async (event, text: string) => {
+    if (odooProcess) {
+      try {
+        odooProcess.stdin?.write(text);
+        return { success: true };
+      } catch (err: any) {
+        console.error('Failed to write to stdin:', err);
+        return { success: false, error: err.message };
+      }
+    }
+    return { success: false, error: 'Odoo process is not running' };
   });
 
   ipcMain.handle('odoo:openExternalTerminal', async (_e, opts: any) => {

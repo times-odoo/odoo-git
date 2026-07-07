@@ -125,7 +125,7 @@ export function SettingsPanel() {
 
   const handleSave = async () => {
     try {
-      await window.git.saveSettings({ trigram, defaultVersion });
+      await window.git.saveSettings({ trigram, defaultVersion } as any);
       addToast({ message: 'Settings saved', type: 'success' });
     } catch (e: any) {
       addToast({ message: 'Failed to save settings', type: 'error' });
@@ -504,7 +504,6 @@ export function SettingsPanel() {
                     className="w-48"
                   />
                 </div>
-
 
                 <button className="btn-accent" onClick={handleSave}>
                   Save Settings

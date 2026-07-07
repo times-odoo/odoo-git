@@ -102,6 +102,7 @@ contextBridge.exposeInMainWorld('git', {
   saveGithubPat: (username: string, pat: string) => ipcRenderer.invoke('app:saveGithubPat', username, pat),
   testGithubPat: (pat: string) => ipcRenderer.invoke('app:testGithubPat', pat),
   getOdooModules: (repoPath: string) => ipcRenderer.invoke('app:getOdooModules', repoPath),
+  listDirectories: (rootPath: string) => ipcRenderer.invoke('app:listDirectories', rootPath),
   onTerminalLog: (callback: (data: any) => void) => {
     const subscription = (_event: any, data: any) => callback(data);
     ipcRenderer.on('git:terminal-log', subscription);
@@ -140,4 +141,5 @@ contextBridge.exposeInMainWorld('odoo', {
   getStoreValue: (key: string) => ipcRenderer.invoke('odoo:getStoreValue', key),
   setStoreValue: (key: string, value: any) => ipcRenderer.invoke('odoo:setStoreValue', key, value),
   openExternalTerminal: (opts: any) => ipcRenderer.invoke('odoo:openExternalTerminal', opts),
+  writeStdin: (text: string) => ipcRenderer.invoke('odoo:writeStdin', text),
 });

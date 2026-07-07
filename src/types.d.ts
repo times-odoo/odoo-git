@@ -90,6 +90,7 @@ export interface AppSettings {
   lastActiveRepo: string | null;
   githubPat: string;
   githubUsername: string;
+  odooRootDir: string;
 }
 
 export type PushResult = {
@@ -181,6 +182,7 @@ export interface GitAPI {
   saveGithubPat(username: string, pat: string): Promise<void>;
   testGithubPat(pat: string): Promise<{ success: boolean; login: string; name: string; error?: string }>;
   getOdooModules(repoPath: string): Promise<string[]>;
+  listDirectories(rootPath: string): Promise<string[]>;
   onTerminalLog(callback: (data: any) => void): () => void;
   // Window controls
   minimizeWindow(): void;
@@ -221,6 +223,7 @@ export interface OdooAPI {
   getStoreValue(key: string): Promise<any>;
   setStoreValue(key: string, value: any): Promise<void>;
   openExternalTerminal(opts: any): Promise<{ success: boolean; error?: string }>;
+  writeStdin(text: string): Promise<{ success: boolean; error?: string }>;
 }
 
 declare global {
