@@ -2232,12 +2232,16 @@ export function OdooPanel() {
                   onChange={handleApplyPreset}
                   placeholder="Select Preset..."
                   className="flex-1"
+                  disabled={isCheckingOut}
                 />
                 {selectedPresetName && (
                   <>
                     <button
                       onClick={handleUpdateCurrentPreset}
-                      className="w-[36px] shrink-0 h-full flex items-center justify-center bg-success/15 border border-success/30 hover:bg-success/25 text-success rounded transition-colors"
+                      disabled={isCheckingOut}
+                      className={`w-[36px] shrink-0 h-full flex items-center justify-center bg-success/15 border border-success/30 hover:bg-success/25 text-success rounded transition-colors ${
+                        isCheckingOut ? 'opacity-40 cursor-not-allowed' : ''
+                      }`}
                       title="Save — update preset with current config"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2246,7 +2250,10 @@ export function OdooPanel() {
                     </button>
                     <button
                       onClick={() => handleDeletePreset(selectedPresetName)}
-                      className="w-[36px] shrink-0 h-full flex items-center justify-center bg-danger/15 border border-danger/30 hover:bg-danger/25 text-danger rounded transition-colors"
+                      disabled={isCheckingOut}
+                      className={`w-[36px] shrink-0 h-full flex items-center justify-center bg-danger/15 border border-danger/30 hover:bg-danger/25 text-danger rounded transition-colors ${
+                        isCheckingOut ? 'opacity-40 cursor-not-allowed' : ''
+                      }`}
                       title="Delete preset"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2257,7 +2264,10 @@ export function OdooPanel() {
                 )}
                 <button
                   onClick={() => setShowSavePresetModal(true)}
-                  className="w-[36px] shrink-0 h-full flex items-center justify-center bg-accent/15 border border-accent/30 hover:bg-accent/25 text-accent rounded transition-colors"
+                  disabled={isCheckingOut}
+                  className={`w-[36px] shrink-0 h-full flex items-center justify-center bg-accent/15 border border-accent/30 hover:bg-accent/25 text-accent rounded transition-colors ${
+                    isCheckingOut ? 'opacity-40 cursor-not-allowed' : ''
+                  }`}
                   title="New preset — save current config as new preset"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
