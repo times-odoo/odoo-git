@@ -2206,7 +2206,7 @@ export function OdooPanel() {
         {!isTerminalMaximized && (
           <div
             onMouseDown={handleMouseDown}
-            className="w-[4px] hover:w-[6px] bg-border hover:bg-accent cursor-col-resize transition-all h-full shrink-0 relative z-[99] active:bg-accent"
+            className="w-[4px] hover:w-[6px] bg-border hover:bg-accent cursor-col-resize transition-all h-full shrink-0 relative z-10 active:bg-accent"
           />
         )}
 
