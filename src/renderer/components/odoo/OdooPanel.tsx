@@ -509,6 +509,9 @@ export function OdooPanel() {
   const repos = useRepoStore((s) => s.repos);
   const activeRepoPath = useRepoStore((s) => s.activeRepoPath);
   const repoStates = useGitStore((s) => s.repoStates);
+  const isCheckingOut = useMemo(() => {
+    return Object.values(repoStates).some((state) => state?.loading?.checkout);
+  }, [repoStates]);
 
   // Compute community repo path (must contain 'odoo' and not 'enterprise', 'theme', 'design')
   const communityRepoPath = useMemo(() => {
