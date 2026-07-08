@@ -416,6 +416,31 @@ export default function App() {
                 <OdooPanel />
               </div>
               {activePanel !== 'odoo' && renderPanel()}
+
+              {/* Premium Glassmorphic Loading Overlay */}
+              {activePanel !== 'odoo' && (isLoading?.checkout || isLoading?.pull || isLoading?.rebase || isLoading?.cherryPick || isLoading?.createBranch) && (
+                <div className="absolute inset-0 bg-bg/50 backdrop-blur-sm flex flex-col items-center justify-center z-50 transition-all duration-300">
+                  <div className="bg-surface/90 border border-border/80 rounded-xl p-6 flex flex-col items-center gap-3.5 shadow-2xl min-w-[200px] transform scale-100 animate-in fade-in zoom-in duration-200">
+                    <div className="relative w-8 h-8 flex items-center justify-center">
+                      <svg className="animate-spin text-accent" width="28" height="28" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    </div>
+                    <span className="text-[13px] font-medium text-primary tracking-wide">
+                      {isLoading?.checkout
+                        ? 'Switching branch...'
+                        : isLoading?.pull
+                        ? 'Pulling changes...'
+                        : isLoading?.rebase
+                        ? 'Rebasing branch...'
+                        : isLoading?.createBranch
+                        ? 'Creating branch...'
+                        : 'Cherry-picking commits...'}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
