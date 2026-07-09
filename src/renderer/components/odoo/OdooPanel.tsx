@@ -2309,8 +2309,16 @@ export function OdooPanel() {
           <div className="p-3 border-b border-border bg-surface/20 flex flex-col gap-3 shrink-0">
             {/* Presets section — comes first */}
             <div className="flex flex-col gap-1.5 tour-odoo-preset">
-              <span className="font-semibold text-muted text-[10px] uppercase tracking-wider">
+              <span className="font-semibold text-muted text-[10px] uppercase tracking-wider flex items-center gap-1.5 select-none">
                 Configuration Preset
+                <span className="group relative inline-block">
+                  <span className="w-3.5 h-3.5 inline-flex items-center justify-center rounded-full bg-slate-800/80 text-[9px] text-muted hover:text-white hover:bg-slate-700 font-semibold cursor-help">
+                    i
+                  </span>
+                  <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 bg-[#161B22] border border-border text-[10px] text-muted p-2 rounded shadow-2xl leading-normal normal-case font-normal z-50">
+                    Save all configuration parameters (database, port, venv, flags) under a custom name to switch projects quickly.
+                  </span>
+                </span>
               </span>
               <div className="flex items-center gap-2 h-[36px]">
                 <Dropdown
@@ -2366,8 +2374,16 @@ export function OdooPanel() {
 
             {/* Venv Row — below preset */}
             <div className={`flex flex-col gap-1.5 border-t border-border/40 pt-2.5 ${isCustomCommandActive ? 'opacity-50 pointer-events-none' : ''}`}>
-              <span className="font-semibold text-muted text-[11px] uppercase tracking-wider">
+              <span className="font-semibold text-muted text-[10px] uppercase tracking-wider flex items-center gap-1.5 select-none">
                 Python Virtual Environment (venv)
+                <span className="group relative inline-block">
+                  <span className="w-3.5 h-3.5 inline-flex items-center justify-center rounded-full bg-slate-800/80 text-[9px] text-muted hover:text-white hover:bg-slate-700 font-semibold cursor-help">
+                    i
+                  </span>
+                  <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 bg-[#161B22] border border-border text-[10px] text-muted p-2 rounded shadow-2xl leading-normal normal-case font-normal z-50">
+                    Selects the Python virtual environment containing the dependencies needed for this Odoo version.
+                  </span>
+                </span>
               </span>
               <div className="flex items-stretch gap-2 w-full h-[36px]">
                 <div className="flex items-stretch gap-1.5 flex-[1.2] min-w-[200px]">
@@ -2656,16 +2672,29 @@ export function OdooPanel() {
                 />
 
                 <div className={`border border-warning/20 bg-warning/5 rounded p-3 space-y-2.5 ${upUseCustomCommand ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}>
-                  <label className="flex items-center gap-1.5 text-[11px] font-semibold text-warning cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      disabled={upUseCustomCommand}
-                      checked={upRestoreTemplate}
-                      onChange={(e) => setUpRestoreTemplate(e.target.checked)}
-                      className="rounded border-border text-warning cursor-pointer focus:ring-warning bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
-                    />
-                    Restore DB from template before upgrade
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-warning cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        disabled={upUseCustomCommand}
+                        checked={upRestoreTemplate}
+                        onChange={(e) => setUpRestoreTemplate(e.target.checked)}
+                        className="rounded border-border text-warning cursor-pointer focus:ring-warning bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                      Restore DB from template before upgrade
+                    </label>
+                    <span className="group relative inline-block select-none">
+                      <span
+                        className="w-3.5 h-3.5 inline-flex items-center justify-center rounded-full bg-warning/20 text-[9px] text-warning hover:text-white hover:bg-warning/40 font-semibold cursor-help"
+                        onClick={(e) => e.preventDefault()}
+                      >
+                        i
+                      </span>
+                      <span className="pointer-events-none absolute bottom-full right-0 mb-2 hidden group-hover:block w-64 bg-[#161B22] border border-border text-[10px] text-muted p-2.5 rounded shadow-2xl leading-relaxed normal-case font-normal z-50">
+                        Automatically drops your target DB and creates a fresh copy from the selected template before executing the upgrade. Perfect for running migrations/upgrades repeatedly on clean data.
+                      </span>
+                    </span>
+                  </div>
                   {upRestoreTemplate && (
                     <div>
                       <label className="block text-[10px] text-warning/80 font-bold uppercase mb-1">Select Template Source</label>
