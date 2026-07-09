@@ -218,6 +218,7 @@ export interface OdooAPI {
   }): Promise<void>;
   stopServer(): Promise<void>;
   getServerStatus(): Promise<{ status: 'starting' | 'running' | 'stopped'; cmd?: string; error?: string }>;
+  getLogHistory(): Promise<string[]>;
   onLog(callback: (text: string) => void): () => void;
   onStateChange(callback: (state: { status: 'starting' | 'running' | 'stopped'; cmd?: string; error?: string; code?: number }) => void): () => void;
   getStoreValue(key: string): Promise<any>;

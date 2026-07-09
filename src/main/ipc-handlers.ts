@@ -9,6 +9,17 @@ let currentSearchSessionId = '';
 let odooProcess: ChildProcess | null = null;
 let currentCmd: string | undefined = undefined;
 let odooStatus: 'starting' | 'running' | 'stopped' = 'stopped';
+let odooLogHistory: string[] = [];
+
+function appendAndSendLog(text: string, eventSender?: Electron.WebContents) {
+  odooLogHistory.push(text);
+  if (odooLogHistory.length > 2000) {
+    odooLogHistory = odooLogHistory.slice(odooLogHistory.length - 2000);
+  }
+  if (eventSender) {
+    eventSender.send('odoo:log', text);
+  }
+}
 function buildOdooCommand(opts: any): { execCmd: string; execArgs: string[]; fullCommandString: string } {
   if (opts.useCustomCommand && opts.customCommand) {
     return {
@@ -783,20 +794,21 @@ export function registerIpcHandlers() {
     initModules?: string;
     updateModules?: string;
   }) => {
+    odooLogHistory = [];
     if (odooProcess) {
-      event.sender.send('odoo:log', '[App] Stopping already running Odoo server...\n');
+      appendAndSendLog('[App] Stopping already running Odoo server...\n', event.sender);
       odooProcess.kill('SIGINT');
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
     const port = getPortFromOpts(opts);
     if (port > 0) {
-      event.sender.send('odoo:log', `[App] Checking if port ${port} is in use...\n`);
+      appendAndSendLog(`[App] Checking if port ${port} is in use...\n`, event.sender);
       const killResult = await killPort(port);
       if (killResult.killed && killResult.pids) {
-        event.sender.send('odoo:log', `[App] Port ${port} was in use by PID(s): ${killResult.pids.join(', ')}. Process killed successfully.\n`);
+        appendAndSendLog(`[App] Port ${port} was in use by PID(s): ${killResult.pids.join(', ')}. Process killed successfully.\n`, event.sender);
       } else if (killResult.error) {
-        event.sender.send('odoo:log', `[App] Warning: Port ${port} was in use by PID(s): ${killResult.pids?.join(', ')}, but failed to kill: ${killResult.error}\n`);
+        appendAndSendLog(`[App] Warning: Port ${port} was in use by PID(s): ${killResult.pids?.join(', ')}, but failed to kill: ${killResult.error}\n`, event.sender);
       }
     }
 
@@ -804,8 +816,8 @@ export function registerIpcHandlers() {
     currentCmd = fullCommandString;
     odooStatus = 'starting';
 
-    event.sender.send('odoo:log', `[App] Starting Odoo Server in ${opts.repoPath}...\n`);
-    event.sender.send('odoo:log', `[App] Command: ${fullCommandString}\n\n`);
+    appendAndSendLog(`[App] Starting Odoo Server in ${opts.repoPath}...\n`, event.sender);
+    appendAndSendLog(`[App] Command: ${fullCommandString}\n\n`, event.sender);
     event.sender.send('odoo:state', { status: 'starting', cmd: fullCommandString });
 
     // Spawn process
@@ -832,7 +844,7 @@ export function registerIpcHandlers() {
       if (out.includes('Password for user')) {
         odooProcess?.stdin?.write((opts.dbPassword || '') + '\n');
       }
-      event.sender.send('odoo:log', out);
+      appendAndSendLog(out, event.sender);
     });
 
     odooProcess.stderr?.on('data', (data) => {
@@ -840,11 +852,11 @@ export function registerIpcHandlers() {
       if (out.includes('Password for user')) {
         odooProcess?.stdin?.write((opts.dbPassword || '') + '\n');
       }
-      event.sender.send('odoo:log', out);
+      appendAndSendLog(out, event.sender);
     });
 
     odooProcess.on('close', (code) => {
-      event.sender.send('odoo:log', `\n[App] Odoo process exited with code ${code}\n`);
+      appendAndSendLog(`\n[App] Odoo process exited with code ${code}\n`, event.sender);
       event.sender.send('odoo:state', { status: 'stopped', code });
       odooProcess = null;
       odooStatus = 'stopped';
@@ -852,7 +864,7 @@ export function registerIpcHandlers() {
     });
 
     odooProcess.on('error', (err) => {
-      event.sender.send('odoo:log', `\n[App] Odoo process error: ${err.message}\n`);
+      appendAndSendLog(`\n[App] Odoo process error: ${err.message}\n`, event.sender);
       event.sender.send('odoo:state', { status: 'stopped', error: err.message });
       odooProcess = null;
       odooStatus = 'stopped';
@@ -864,7 +876,7 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('odoo:stopServer', async (event) => {
     if (odooProcess) {
-      event.sender.send('odoo:log', '\n[App] Stopping Odoo Server...\n');
+      appendAndSendLog('\n[App] Stopping Odoo Server...\n', event.sender);
       try {
         odooProcess.stdin?.write('\x03');
       } catch {}
@@ -897,6 +909,10 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('odoo:getServerStatus', () => {
     return { status: odooStatus, cmd: currentCmd };
+  });
+
+  ipcMain.handle('odoo:getLogHistory', () => {
+    return odooLogHistory;
   });
 
   ipcMain.handle('odoo:writeStdin', async (event, text: string) => {

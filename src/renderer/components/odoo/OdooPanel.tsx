@@ -1612,6 +1612,12 @@ export function OdooPanel() {
         setIsDbConnected(false);
       }
       await checkServerStatus();
+
+      // Retrieve log history from main process
+      const history = await window.odoo.getLogHistory();
+      if (history && history.length > 0) {
+        setLogs(history.map((text) => stripAnsi(text)));
+      }
     };
     init();
   }, []);

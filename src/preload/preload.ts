@@ -128,6 +128,7 @@ contextBridge.exposeInMainWorld('odoo', {
   startServer: (opts: any) => ipcRenderer.invoke('odoo:startServer', opts),
   stopServer: () => ipcRenderer.invoke('odoo:stopServer'),
   getServerStatus: () => ipcRenderer.invoke('odoo:getServerStatus'),
+  getLogHistory: () => ipcRenderer.invoke('odoo:getLogHistory'),
   onLog: (callback: (text: string) => void) => {
     const sub = (_event: any, text: string) => callback(text);
     ipcRenderer.on('odoo:log', sub);
