@@ -514,6 +514,29 @@ function AddonsPathInput({ label, value, onChange, disabled = false }: AddonsPat
   );
 }
 
+interface AddonsPathInputProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}
+
+function AddonsPathInput({ label, value, onChange, disabled = false }: AddonsPathInputProps) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="block text-[10px] text-muted font-bold uppercase mb-1">{label}</label>
+      <input
+        type="text"
+        disabled={disabled}
+        className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-3 border border-border rounded outline-none font-mono text-primary min-h-[34px] focus:border-accent/70 disabled:opacity-50 disabled:cursor-not-allowed"
+        placeholder="e.g. addons,../enterprise"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
 interface AddonPathRowsListProps {
   value: string;
   onChange: (value: string) => void;
@@ -626,6 +649,56 @@ export function OdooPanel() {
   const splitContainerRef = useRef<HTMLDivElement>(null);
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
+
+  const [isBreakpointMode, setIsBreakpointMode] = useState(() => {
+    return localStorage.getItem('odoo_isBreakpointMode') === 'true';
+  });
+  useEffect(() => {
+    localStorage.setItem('odoo_isBreakpointMode', String(isBreakpointMode));
+  }, [isBreakpointMode]);
+
+  const [snippets, setSnippets] = useState<{ label: string; text: string; shortcut: string }[]>(() => {
+    const saved = localStorage.getItem('odoo_debugSnippets');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {}
+    }
+    return [
+      { label: 'c', text: 'c', shortcut: 'c' },
+      { label: 'n', text: 'n', shortcut: 'n' },
+      { label: 's', text: 's', shortcut: 's' },
+      { label: '.read()', text: '.read()', shortcut: 'r' },
+      { label: '.browse()', text: '.browse()', shortcut: 'b' },
+      { label: '.search()', text: '.search([])', shortcut: 'f' },
+      { label: 'locals()', text: 'locals()', shortcut: 'l' },
+      { label: 'w', text: 'w', shortcut: 'w' },
+    ];
+  });
+
+  const saveSnippets = (newSnippets: typeof snippets) => {
+    setSnippets(newSnippets);
+    localStorage.setItem('odoo_debugSnippets', JSON.stringify(newSnippets));
+  };
+
+  const [showSnippetSettings, setShowSnippetSettings] = useState(false);
+<<<<<<< Updated upstream
+=======
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [infoActiveTab, setInfoActiveTab] = useState<'pdb' | 'odoo'>('pdb');
+  const [autocompleteEnabled, setAutocompleteEnabled] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [filteredSuggestions, setFilteredSuggestions] = useState<Completion[]>([]);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+  const [hoveredSuggestion, setHoveredSuggestion] = useState<Completion | null>(null);
+>>>>>>> Stashed changes
+  const stdinInputRef = useRef<HTMLInputElement>(null);
+  const isExecutingSilentCommandRef = useRef(false);
+  const silentBufferRef = useRef<string>('');
+  const dynamicCompletionsRef = useRef<Completion[]>([]);
 
   const handleScroll = () => {
     const el = logsContainerRef.current;
@@ -1738,6 +1811,30 @@ export function OdooPanel() {
   useEffect(() => {
     const unsubLog = window.odoo.onLog((text) => {
       const cleanText = stripAnsi(text);
+      
+      if (isExecutingSilentCommandRef.current) {
+        silentBufferRef.current += cleanText;
+        if (silentBufferRef.current.includes('(Pdb)') || silentBufferRef.current.includes('(ipdb)')) {
+          isExecutingSilentCommandRef.current = false;
+          const match = silentBufferRef.current.match(/___IDE___(.*)/);
+          if (match) {
+            const rawVars = match[1].split('\n')[0].trim();
+            if (rawVars) {
+              const vars = rawVars.split(',').filter(Boolean);
+              dynamicCompletionsRef.current = vars.map((v) => ({
+                text: v,
+                display: `.${v}`,
+                type: 'dynamic',
+                doc: `Dynamic Attribute:\n${v}`
+              }));
+              setTimeout(() => window.dispatchEvent(new CustomEvent('odoo-update-suggestions')), 10);
+            }
+          }
+          silentBufferRef.current = '';
+        }
+        return; // Suppress output
+      }
+
       logBufferRef.current.push(cleanText);
 
       // Schedule a flush at 16fps (every 60ms) to ensure smooth rendering and low CPU load
@@ -2043,7 +2140,236 @@ export function OdooPanel() {
     }
   };
 
+  const applySnippet = (text: string) => {
+    setStdinInput((prev) => {
+      if (text.startsWith('.')) {
+        return prev + text;
+      }
+      return prev ? `${prev} ${text}` : text;
+    });
+    setTimeout(() => {
+      if (stdinInputRef.current) {
+        stdinInputRef.current.focus();
+      }
+    }, 10);
+  };
+
+<<<<<<< Updated upstream
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+=======
+  const selectSuggestion = (item: Completion) => {
+    setStdinInput((prev) => {
+      const val = prev;
+      
+      // Replace suffix based on what triggered the completion
+      if (val.match(/self\.env\.cr\.[a-zA-Z0-9_]*$/)) {
+        return val.replace(/self\.env\.cr\.[a-zA-Z0-9_]*$/, `self.env.cr.${item.text}`);
+      }
+      if (val.match(/env\.cr\.[a-zA-Z0-9_]*$/)) {
+        return val.replace(/env\.cr\.[a-zA-Z0-9_]*$/, `env.cr.${item.text}`);
+      }
+      if (val.match(/self\.env\.[a-zA-Z0-9_]*$/)) {
+        return val.replace(/self\.env\.[a-zA-Z0-9_]*$/, `self.env.${item.text}`);
+      }
+      if (val.match(/env\.[a-zA-Z0-9_]*$/)) {
+        return val.replace(/env\.[a-zA-Z0-9_]*$/, `env.${item.text}`);
+      }
+      if (val.match(/self\.[a-zA-Z0-9_]*$/)) {
+        return val.replace(/self\.[a-zA-Z0-9_]*$/, `self.${item.text}`);
+      }
+      if (val.match(/self\.env\[['"][a-zA-Z0-9_\.]*$/)) {
+        return val.replace(/self\.env\[['"][a-zA-Z0-9_\.]*$/, `self.env['${item.text}'`);
+      }
+      
+      const lastWordMatch = val.match(/[a-zA-Z_][a-zA-Z0-9_]*$/);
+      if (lastWordMatch) {
+        const lastWord = lastWordMatch[0];
+        if (item.text.startsWith('.')) {
+          return val + item.text;
+        }
+        return val.slice(0, val.length - lastWord.length) + item.text;
+      }
+      
+      if (item.text.startsWith('.')) {
+        return val + item.text;
+      }
+      return val ? `${val}${item.text}` : item.text;
+    });
+
+    setShowSuggestions(false);
+    setHoveredSuggestion(null);
+
+    setTimeout(() => {
+      if (stdinInputRef.current) {
+        stdinInputRef.current.focus();
+      }
+    }, 10);
+  };
+
+  const updateSuggestions = useCallback((value: string) => {
+    const val = value;
+    let list: Completion[] = [];
+    let typedFilter = '';
+
+    const crMatch = val.match(/(self\.)?env\.cr\.([a-zA-Z0-9_]*)$/);
+    const envMatch = val.match(/(self\.)?env\.([a-zA-Z0-9_]*)$/);
+    const recordMatch = val.match(/self\.([a-zA-Z0-9_]*)$/);
+    const modelMatch = val.match(/(self\.)?env\[['"]([a-zA-Z0-9_\.]*)$/);
+    const domainMatch = val.match(/\.(search|filtered)\(\s*\[\s*\(\s*['"][a-zA-Z0-9_]+['"]\s*,\s*['"]([a-zA-Z_=<>!]*)$/);
+
+    if (domainMatch) {
+      typedFilter = domainMatch[2] || '';
+      list = [
+        { text: '=', display: '=', type: 'operator', doc: 'Equals' },
+        { text: '!=', display: '!=', type: 'operator', doc: 'Not equals' },
+        { text: 'in', display: 'in', type: 'operator', doc: 'In list' },
+        { text: 'not in', display: 'not in', type: 'operator', doc: 'Not in list' },
+        { text: 'like', display: 'like', type: 'operator', doc: 'Like (wildcard %var%)' },
+        { text: 'ilike', display: 'ilike', type: 'operator', doc: 'Case-insensitive Like' },
+        { text: '=like', display: '=like', type: 'operator', doc: 'Exact Like' },
+        { text: '=ilike', display: '=ilike', type: 'operator', doc: 'Exact Case-insensitive Like' },
+        { text: 'child_of', display: 'child_of', type: 'operator', doc: 'Is child of' },
+        { text: 'parent_of', display: 'parent_of', type: 'operator', doc: 'Is parent of' },
+      ];
+    } else if (crMatch) {
+      typedFilter = crMatch[2] || '';
+      list = [
+        { text: 'commit()', display: 'commit()', type: 'method', doc: 'cr.commit()\n\nCommits pending changes to the database.' },
+        { text: 'rollback()', display: 'rollback()', type: 'method', doc: 'cr.rollback()\n\nDiscard changes in current transaction.' },
+        { text: 'execute()', display: 'execute(query, params=None)', type: 'method', doc: 'cr.execute(query: str, params=None)\n\nExecute a raw SQL query.' },
+      ];
+    } else if (envMatch) {
+      typedFilter = envMatch[2] || '';
+      list = [
+        { text: 'user', display: 'user', type: 'env', doc: 'env.user -> res.users\n\nCurrent logged user.' },
+        { text: 'company', display: 'company', type: 'env', doc: 'env.company -> res.company\n\nCurrent active company.' },
+        { text: 'companies', display: 'companies', type: 'env', doc: 'env.companies -> recordset\n\nAllowed companies list.' },
+        { text: 'context', display: 'context', type: 'env', doc: 'env.context -> dict\n\nEnvironment context dictionary.' },
+        { text: 'cr', display: 'cr', type: 'env', doc: 'env.cr -> database cursor transaction' },
+        { text: 'lang', display: 'lang', type: 'env', doc: "env.lang -> str\n\nLanguage code string, e.g. 'en_US'." },
+      ];
+    } else if (recordMatch) {
+      typedFilter = recordMatch[1] || '';
+      list = [
+        ...dynamicCompletionsRef.current,
+        { text: 'read()', display: '.read(fields=None)', type: 'method', doc: 'read(fields=None) -> list[dict]\n\nRead the database values. Returns a list of dictionaries mapping field names to values.' },
+        { text: 'browse()', display: '.browse(ids)', type: 'method', doc: 'browse(ids) -> recordset\n\nReturns a recordset for the database IDs provided.' },
+        { text: 'search()', display: '.search(domain)', type: 'method', doc: 'search(domain) -> recordset\n\nSearches records matching given domain.' },
+        { text: 'fields_get()', display: '.fields_get(fields=None)', type: 'method', doc: 'fields_get(fields=None) -> dict\n\nGet definitions and metadata of all fields.' },
+        { text: 'filtered()', display: '.filtered(func)', type: 'method', doc: 'filtered(func) -> recordset\n\nFilters records using function or domain.' },
+        { text: 'mapped()', display: '.mapped(path)', type: 'method', doc: 'mapped(path) -> list or recordset\n\nMaps field values across records.' },
+        { text: 'ensure_one()', display: '.ensure_one()', type: 'method', doc: 'ensure_one() -> None\n\nAsserts recordset has exactly one record.' },
+        { text: 'exists()', display: '.exists()', type: 'method', doc: 'exists() -> recordset\n\nCheck database for records that still exist.' },
+        { text: 'write()', display: '.write(vals)', type: 'method', doc: 'write(vals: dict) -> bool\n\nUpdate records with given field-values.' },
+        { text: 'create()', display: '.create(vals)', type: 'method', doc: 'create(vals: dict) -> recordset\n\nCreate new database records.' },
+        { text: 'unlink()', display: '.unlink()', type: 'method', doc: 'unlink() -> bool\n\nDelete records from database.' },
+        { text: 'copy()', display: '.copy(default=None)', type: 'method', doc: 'copy(default=None) -> recordset\n\nDuplicate the current record.' },
+        { text: 'id', display: '.id', type: 'property', doc: 'id -> int\n\nDB ID of single record.' },
+        { text: 'ids', display: '.ids', type: 'property', doc: 'ids -> list[int]\n\nDB IDs of recordset.' },
+        { text: '_name', display: '._name', type: 'property', doc: '_name -> str\n\nTechnical name of model.' },
+        { text: 'env', display: '.env', type: 'property', doc: 'env -> Environment\n\nReturns the environment object.' },
+      ];
+    } else if (modelMatch) {
+      typedFilter = modelMatch[2] || '';
+      list = [
+        { text: 'res.users', display: 'res.users', type: 'model', doc: 'res.users: Technical Odoo Users model' },
+        { text: 'res.partner', display: 'res.partner', type: 'model', doc: 'res.partner: Contacts, Customers, Vendors' },
+        { text: 'res.company', display: 'res.company', type: 'model', doc: 'res.company: Multi-company definitions' },
+        { text: 'account.move', display: 'account.move', type: 'model', doc: 'account.move: Journal entries and Customer invoices' },
+        { text: 'sale.order', display: 'sale.order', type: 'model', doc: 'sale.order: Sales Orders' },
+        { text: 'purchase.order', display: 'purchase.order', type: 'model', doc: 'purchase.order: Purchase Orders' },
+        { text: 'product.product', display: 'product.product', type: 'model', doc: 'product.product: Products variant record' },
+        { text: 'product.template', display: 'product.template', type: 'model', doc: 'product.template: Base product template definitions' },
+      ];
+    } else {
+      const lastWordMatch = val.match(/[a-zA-Z_][a-zA-Z0-9_]*$/);
+      if (lastWordMatch) {
+        typedFilter = lastWordMatch[0] || '';
+      }
+      list = [
+        { text: 'self', display: 'self', type: 'variable', doc: 'self: The current active recordset.' },
+        { text: 'locals()', display: 'locals()', type: 'function', doc: 'locals() -> dict\n\nPrint all local variables in current stack frame.' },
+        { text: 'globals()', display: 'globals()', type: 'function', doc: 'globals() -> dict\n\nPrint all global variables in current frame.' },
+        { text: 'self.env', display: 'self.env', type: 'env', doc: 'self.env -> Environment\n\nOdoo environment context.' },
+        { text: 'self.env.cr.commit()', display: 'cr.commit()', type: 'method', doc: 'Commit current transaction changes to DB.' },
+        { text: 'self.fields_get()', display: 'fields_get()', type: 'method', doc: 'Get model fields configuration definitions.' },
+      ];
+    }
+
+    const filtered = list.filter(item =>
+      item.text.toLowerCase().startsWith(typedFilter.toLowerCase())
+    );
+
+    setFilteredSuggestions(filtered);
+    setActiveSuggestionIndex(0);
+    setShowSuggestions(filtered.length > 0);
+  }, []);
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      if (stdinInputRef.current) {
+        updateSuggestions(stdinInputRef.current.value);
+      }
+    };
+    window.addEventListener('odoo-update-suggestions', handleUpdate);
+    return () => window.removeEventListener('odoo-update-suggestions', handleUpdate);
+  }, [updateSuggestions]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.ctrlKey && e.code === 'Space') {
+      e.preventDefault();
+      setAutocompleteEnabled((prev) => {
+        const next = !prev;
+        if (!next) {
+          setShowSuggestions(false);
+        } else {
+          updateSuggestions(stdinInput);
+        }
+        return next;
+      });
+      return;
+    }
+
+    if (showSuggestions && filteredSuggestions.length > 0) {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveSuggestionIndex((prev) => (prev - 1 + filteredSuggestions.length) % filteredSuggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveSuggestionIndex((prev) => (prev + 1) % filteredSuggestions.length);
+        return;
+      }
+      if (e.key === 'Tab' || e.key === 'Enter') {
+        e.preventDefault();
+        selectSuggestion(filteredSuggestions[activeSuggestionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSuggestions(false);
+        setHoveredSuggestion(null);
+        return;
+      }
+    }
+
+    if (e.ctrlKey && e.key === 'Enter') {
+      e.preventDefault();
+      updateSuggestions(stdinInput);
+      return;
+    }
+
+>>>>>>> Stashed changes
+    const matchingSnippet = snippets.find(
+      (s) => s.shortcut && e.key.toLowerCase() === s.shortcut.toLowerCase()
+    );
+    if (e.altKey && matchingSnippet) {
+      e.preventDefault();
+      applySnippet(matchingSnippet.text);
+      return;
+    }
+
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (commandHistory.length === 0) return;
@@ -2458,6 +2784,168 @@ export function OdooPanel() {
               <div ref={terminalEndRef} />
             </div>
 
+            {/* Snippet Bar */}
+            {serverStatus === 'running' && (isDebuggerOpen || isBreakpointMode) && (
+              <div className="flex items-center gap-2 px-3 py-1.5 border-t border-border/20 bg-slate-900/40 shrink-0 select-none overflow-x-auto scrollbar-none">
+                <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider shrink-0 mr-1 flex items-center gap-1">
+                  <svg className="w-3 h-3 text-teal-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                  </svg>
+                  Snippets:
+                </span>
+                <button
+                  onClick={() => {
+                    setAutocompleteEnabled(!autocompleteEnabled);
+                    if (autocompleteEnabled) setShowSuggestions(false);
+                  }}
+                  className={`px-1.5 py-[1px] text-[8px] font-bold rounded uppercase shrink-0 transition-colors ${autocompleteEnabled ? 'bg-accent/20 text-accent border border-accent/40' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
+                  title="Toggle smart autocomplete (Ctrl+Space)"
+                >
+                  Auto: {autocompleteEnabled ? 'ON' : 'OFF'}
+                </button>
+                <div className="flex items-center gap-1.5 overflow-x-auto flex-1 scrollbar-none py-0.5 ml-1">
+                  {snippets.map((snip, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => applySnippet(snip.text)}
+                      className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800/80 hover:bg-slate-700 active:bg-slate-650 border border-slate-700/60 hover:border-slate-600 text-slate-350 hover:text-white transition-all shadow-sm shrink-0 flex items-center gap-1"
+                      title={snip.shortcut ? `Alt + ${snip.shortcut.toUpperCase()} to trigger` : `Click to insert`}
+                    >
+                      <span>{snip.label}</span>
+                      {snip.shortcut && (
+                        <span className="text-[8px] bg-slate-900 border border-slate-750 px-1 py-[0.5px] rounded-sm text-slate-500 font-semibold uppercase">
+                          alt+{snip.shortcut}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSnippetSettings(!showSnippetSettings)}
+                  className={`w-5 h-5 flex items-center justify-center rounded border transition-all shrink-0 ${
+                    showSnippetSettings
+                      ? 'bg-accent/20 border-accent/60 text-accent'
+                      : 'bg-slate-800 border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700'
+                  }`}
+                  title="Configure Snippets & Shortcuts"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.43l-1.003.828c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.02-.397-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.43l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.991l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.645-.869l.214-1.28z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            {/* Snippet Manager Settings Panel */}
+            {showSnippetSettings && (
+              <div className="absolute bottom-28 right-3 z-50 w-80 bg-[#161B22] border border-border rounded shadow-2xl p-3 flex flex-col gap-2 font-sans select-none text-[11px] text-[#C9D1D9]">
+                <div className="flex items-center justify-between border-b border-border/40 pb-1.5 mb-1 shrink-0">
+                  <span className="font-bold text-slate-200">Configure Snippets & Shortcuts</span>
+                  <button
+                    onClick={() => setShowSnippetSettings(false)}
+                    className="text-slate-400 hover:text-danger text-[14px] leading-none transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                  {snippets.map((snip, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5 bg-slate-950/40 p-1.5 rounded border border-border/20">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex gap-1">
+                          <input
+                            type="text"
+                            value={snip.label}
+                            onChange={(e) => {
+                              const newSnips = [...snippets];
+                              newSnips[idx].label = e.target.value;
+                              saveSnippets(newSnips);
+                            }}
+                            placeholder="Label"
+                            className="w-full bg-slate-900 text-[10px] py-0.5 px-1 border border-border/30 rounded focus:border-accent font-mono text-slate-100"
+                            title="Button Label"
+                          />
+                          <input
+                            type="text"
+                            value={snip.text}
+                            onChange={(e) => {
+                              const newSnips = [...snippets];
+                              newSnips[idx].text = e.target.value;
+                              saveSnippets(newSnips);
+                            }}
+                            placeholder="Text to insert"
+                            className="w-full bg-slate-900 text-[10px] py-0.5 px-1 border border-border/30 rounded focus:border-accent font-mono text-slate-100"
+                            title="Actual insertion string (e.g. .read())"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1 text-[9px] text-muted">
+                          <span>Alt +</span>
+                          <input
+                            type="text"
+                            maxLength={1}
+                            value={snip.shortcut}
+                            onChange={(e) => {
+                              const newSnips = [...snippets];
+                              newSnips[idx].shortcut = e.target.value.toLowerCase();
+                              saveSnippets(newSnips);
+                            }}
+                            placeholder="key"
+                            className="w-8 bg-slate-900 text-[9px] py-0.5 text-center border border-border/30 rounded focus:border-accent font-mono text-slate-100"
+                            title="Alt + this key to trigger"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newSnips = snippets.filter((_, i) => i !== idx);
+                          saveSnippets(newSnips);
+                        }}
+                        className="text-danger/70 hover:text-danger hover:scale-110 transition-all font-bold px-1.5 text-[14px]"
+                        title="Delete Snippet"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between border-t border-border/30 pt-2 mt-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newSnips = [...snippets, { label: 'new', text: '', shortcut: '' }];
+                      saveSnippets(newSnips);
+                    }}
+                    className="px-2 py-1 rounded bg-accent/15 border border-accent/30 hover:bg-accent/25 text-accent text-[9px] font-semibold transition-colors"
+                  >
+                    + Add Snippet
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const defaultSnips = [
+                        { label: 'c', text: 'c', shortcut: 'c' },
+                        { label: 'n', text: 'n', shortcut: 'n' },
+                        { label: 's', text: 's', shortcut: 's' },
+                        { label: '.read()', text: '.read()', shortcut: 'r' },
+                        { label: '.browse()', text: '.browse()', shortcut: 'b' },
+                        { label: '.search()', text: '.search([])', shortcut: 'f' },
+                        { label: 'locals()', text: 'locals()', shortcut: 'l' },
+                        { label: 'w', text: 'w', shortcut: 'w' },
+                      ];
+                      saveSnippets(defaultSnips);
+                    }}
+                    className="px-2 py-1 rounded bg-slate-800 border border-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-200 text-[9px] font-semibold transition-colors"
+                  >
+                    Reset Defaults
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Stdin Input Bar */}
             {serverStatus === 'running' && (
               <form
@@ -2468,7 +2956,41 @@ export function OdooPanel() {
                 <input
                   type="text"
                   value={stdinInput}
+<<<<<<< Updated upstream
                   onChange={(e) => setStdinInput(e.target.value)}
+                  onChange={(e) => setStdinInput(e.target.value)}
+=======
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setStdinInput(val);
+                    
+                    if (!autocompleteEnabled) {
+                      setShowSuggestions(false);
+                      setHoveredSuggestion(null);
+                      return;
+                    }
+                    
+                    const lastWordMatch = val.match(/([a-zA-Z0-9_\.\[\]'"]+)$/);
+                    if (lastWordMatch) {
+                      const lastWord = lastWordMatch[1];
+                      if (lastWord.endsWith('.') && lastWord !== '.' && isDebuggerOpen) {
+                        const varName = lastWord.slice(0, -1);
+                        if (!isExecutingSilentCommandRef.current) {
+                          isExecutingSilentCommandRef.current = true;
+                          silentBufferRef.current = '';
+                          dynamicCompletionsRef.current = [];
+                          // Send silent evaluation to Pdb
+                          const pyCmd = `import sys; sys.stdout.write("___IDE___" + ",".join(eval("${varName}")._fields.keys() if hasattr(eval("${varName}"), "_fields") else dir(eval("${varName}"))) + "\\n")`;
+                          window.odoo.writeStdin(`!${pyCmd}\n`);
+                        }
+                      }
+                      updateSuggestions(val);
+                    } else {
+                      setShowSuggestions(false);
+                      setHoveredSuggestion(null);
+                    }
+                  }}
+>>>>>>> Stashed changes
                   onKeyDown={handleKeyDown}
                   placeholder="Type input here and press Enter to send to process (e.g. for pdb breakpoint)..."
                   className="flex-1 bg-transparent border-none text-[11px] font-mono text-slate-100 focus:outline-none focus:ring-0 p-0 placeholder:text-slate-600"
