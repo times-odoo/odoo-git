@@ -2104,7 +2104,7 @@ export function OdooPanel() {
         </div>
 
         {/* Server Control / Status in Header */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 tour-odoo-run-btn">
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-muted font-bold uppercase tracking-wider">Status:</span>
             <div className="flex items-center gap-1.5 bg-surface border border-border/60 rounded px-2.5 py-1">
@@ -2326,7 +2326,7 @@ export function OdooPanel() {
             </div>
 
             {/* Venv Row — below preset */}
-            <div className={`flex flex-col gap-1.5 border-t border-border/40 pt-2.5 ${isCustomCommandActive ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className={`flex flex-col gap-1.5 border-t border-border/40 pt-2.5 tour-odoo-venv ${isCustomCommandActive ? 'opacity-50 pointer-events-none' : ''}`}>
               <span className="font-semibold text-muted text-[11px] uppercase tracking-wider">
                 Python Virtual Environment (venv)
               </span>
@@ -2411,7 +2411,7 @@ export function OdooPanel() {
             {activeTab === 'run' && (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
+                  <div className="tour-odoo-db-field">
                     <label className="block text-[10px] text-muted font-bold uppercase mb-1">Target DB</label>
                     <DbDropdown
                       value={runDbName}
