@@ -2311,10 +2311,12 @@ export function OdooPanel() {
             <div className="flex flex-col gap-1.5 tour-odoo-preset">
               <span className="font-semibold text-muted text-[10px] uppercase tracking-wider flex items-center gap-1.5 select-none">
                 Configuration Preset
-                <span className="group relative inline-block">
-                  <span className="w-3.5 h-3.5 inline-flex items-center justify-center rounded-full bg-slate-800/80 text-[9px] text-muted hover:text-white hover:bg-slate-700 font-semibold cursor-help">
-                    i
-                  </span>
+                <span className="group relative inline-flex items-center">
+                  <svg className="w-3.5 h-3.5 text-slate-500 hover:text-white transition-colors cursor-help" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" strokeLinecap="round" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" strokeLinecap="round" strokeWidth="2.5" />
+                  </svg>
                   <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 bg-[#161B22] border border-border text-[10px] text-muted p-2 rounded shadow-2xl leading-normal normal-case font-normal z-50">
                     Save all configuration parameters (database, port, venv, flags) under a custom name to switch projects quickly.
                   </span>
@@ -2376,10 +2378,12 @@ export function OdooPanel() {
             <div className={`flex flex-col gap-1.5 border-t border-border/40 pt-2.5 ${isCustomCommandActive ? 'opacity-50 pointer-events-none' : ''}`}>
               <span className="font-semibold text-muted text-[10px] uppercase tracking-wider flex items-center gap-1.5 select-none">
                 Python Virtual Environment (venv)
-                <span className="group relative inline-block">
-                  <span className="w-3.5 h-3.5 inline-flex items-center justify-center rounded-full bg-slate-800/80 text-[9px] text-muted hover:text-white hover:bg-slate-700 font-semibold cursor-help">
-                    i
-                  </span>
+                <span className="group relative inline-flex items-center">
+                  <svg className="w-3.5 h-3.5 text-slate-500 hover:text-white transition-colors cursor-help" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" strokeLinecap="round" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" strokeLinecap="round" strokeWidth="2.5" />
+                  </svg>
                   <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 bg-[#161B22] border border-border text-[10px] text-muted p-2 rounded shadow-2xl leading-normal normal-case font-normal z-50">
                     Selects the Python virtual environment containing the dependencies needed for this Odoo version.
                   </span>
@@ -2672,29 +2676,32 @@ export function OdooPanel() {
                 />
 
                 <div className={`border border-warning/20 bg-warning/5 rounded p-3 space-y-2.5 ${upUseCustomCommand ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}>
-                  <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-warning cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        disabled={upUseCustomCommand}
-                        checked={upRestoreTemplate}
-                        onChange={(e) => setUpRestoreTemplate(e.target.checked)}
-                        className="rounded border-border text-warning cursor-pointer focus:ring-warning bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
-                      />
-                      Restore DB from template before upgrade
-                    </label>
-                    <span className="group relative inline-block select-none">
-                      <span
-                        className="w-3.5 h-3.5 inline-flex items-center justify-center rounded-full bg-warning/20 text-[9px] text-warning hover:text-white hover:bg-warning/40 font-semibold cursor-help"
-                        onClick={(e) => e.preventDefault()}
-                      >
-                        i
-                      </span>
-                      <span className="pointer-events-none absolute bottom-full right-0 mb-2 hidden group-hover:block w-64 bg-[#161B22] border border-border text-[10px] text-muted p-2.5 rounded shadow-2xl leading-relaxed normal-case font-normal z-50">
+                  <label className="flex items-center gap-1.5 text-[11px] font-semibold text-warning cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      disabled={upUseCustomCommand}
+                      checked={upRestoreTemplate}
+                      onChange={(e) => setUpRestoreTemplate(e.target.checked)}
+                      className="rounded border-border text-warning cursor-pointer focus:ring-warning bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <span>Restore DB from template before upgrade</span>
+                    <span
+                      className="group relative inline-flex items-center ml-1"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                    >
+                      <svg className="w-3.5 h-3.5 text-warning/75 hover:text-white transition-colors cursor-help" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="16" x2="12" y2="12" strokeLinecap="round" />
+                        <line x1="12" y1="8" x2="12.01" y2="8" strokeLinecap="round" strokeWidth="2.5" />
+                      </svg>
+                      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-64 bg-[#161B22] border border-border text-[10px] text-muted p-2.5 rounded shadow-2xl leading-relaxed normal-case font-normal z-50">
                         Automatically drops your target DB and creates a fresh copy from the selected template before executing the upgrade. Perfect for running migrations/upgrades repeatedly on clean data.
                       </span>
                     </span>
-                  </div>
+                  </label>
                   {upRestoreTemplate && (
                     <div>
                       <label className="block text-[10px] text-warning/80 font-bold uppercase mb-1">Select Template Source</label>
