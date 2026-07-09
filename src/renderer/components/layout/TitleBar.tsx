@@ -21,6 +21,21 @@ export function TitleBar() {
 
       <div className="flex items-center no-drag">
         <button
+          className="px-3 h-10 flex items-center justify-center gap-1.5 text-muted hover:text-accent hover:bg-border/30 transition-colors text-[11px] font-semibold"
+          onClick={() => {
+            localStorage.removeItem('odoogit_hasSeenTour');
+            window.location.reload();
+          }}
+          title="Start walkthrough tour"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          Help Tour
+        </button>
+        <button
           className="w-10 h-10 flex items-center justify-center text-muted hover:text-primary hover:bg-border/30 transition-colors"
           onClick={() => window.git.minimizeWindow()}
           title="Minimize"
