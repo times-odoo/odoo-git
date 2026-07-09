@@ -668,14 +668,14 @@ export function OdooPanel() {
       } catch (e) {}
     }
     return [
-      { label: 'c', text: 'c', shortcut: 'c' },
-      { label: 'n', text: 'n', shortcut: 'n' },
-      { label: 's', text: 's', shortcut: 's' },
       { label: '.read()', text: '.read()', shortcut: 'r' },
       { label: '.browse()', text: '.browse()', shortcut: 'b' },
       { label: '.search()', text: '.search([])', shortcut: 'f' },
-      { label: 'locals()', text: 'locals()', shortcut: 'l' },
-      { label: 'w', text: 'w', shortcut: 'w' },
+      { label: '.fields_get()', text: '.fields_get()', shortcut: 'g' },
+      { label: '.filtered()', text: '.filtered(lambda x: )', shortcut: 'x' },
+      { label: 'self.env', text: "self.env[''].search([])", shortcut: 'e' },
+      { label: '.mapped()', text: ".mapped('')", shortcut: 'm' },
+      { label: 'cr.commit()', text: 'self.env.cr.commit()', shortcut: 'c' },
     ];
   });
 
@@ -695,6 +695,8 @@ export function OdooPanel() {
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
   const [hoveredSuggestion, setHoveredSuggestion] = useState<Completion | null>(null);
 >>>>>>> Stashed changes
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [infoActiveTab, setInfoActiveTab] = useState<'pdb' | 'odoo'>('pdb');
   const stdinInputRef = useRef<HTMLInputElement>(null);
   const isExecutingSilentCommandRef = useRef(false);
   const silentBufferRef = useRef<string>('');
@@ -2823,6 +2825,20 @@ export function OdooPanel() {
                 </div>
                 <button
                   type="button"
+                  onClick={() => setShowInfoModal(!showInfoModal)}
+                  className={`w-5 h-5 flex items-center justify-center rounded border transition-all shrink-0 mr-1 ${
+                    showInfoModal
+                      ? 'bg-amber-500/20 border-amber-500/60 text-amber-400'
+                      : 'bg-slate-800 border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700'
+                  }`}
+                  title="Debugger Cheatsheet & Documentation"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 111.063.852l-.708 2.836a.75.75 0 001.063.852l.041-.028M12 4.75a.75.75 0 100 1.5.75.75 0 000-1.5z" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setShowSnippetSettings(!showSnippetSettings)}
                   className={`w-5 h-5 flex items-center justify-center rounded border transition-all shrink-0 ${
                     showSnippetSettings
@@ -2836,6 +2852,125 @@ export function OdooPanel() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 </button>
+              </div>
+            )}
+
+            {/* Debugger Cheatsheet Info Panel */}
+            {showInfoModal && (
+              <div className="absolute bottom-28 right-3 z-50 w-96 bg-[#161B22] border border-border/80 rounded shadow-2xl p-3 flex flex-col gap-2.5 font-sans select-none text-[11px] text-[#C9D1D9]">
+                <div className="flex items-center justify-between border-b border-border/40 pb-1.5 shrink-0">
+                  <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 111.063.852l-.708 2.836a.75.75 0 001.063.852l.041-.028M12 4.75a.75.75 0 100 1.5.75.75 0 000-1.5z" />
+                    </svg>
+                    Debugger Cheatsheet
+                  </span>
+                  <button
+                    onClick={() => setShowInfoModal(false)}
+                    className="text-slate-400 hover:text-danger text-[14px] leading-none transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {/* Tab Header */}
+                <div className="flex border-b border-border/20 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setInfoActiveTab('pdb')}
+                    className={`flex-1 py-1 text-center font-semibold border-b-2 transition-all ${
+                      infoActiveTab === 'pdb'
+                        ? 'border-accent text-accent'
+                        : 'border-transparent text-slate-455 hover:text-slate-200'
+                    }`}
+                  >
+                    Python Pdb
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInfoActiveTab('odoo')}
+                    className={`flex-1 py-1 text-center font-semibold border-b-2 transition-all ${
+                      infoActiveTab === 'odoo'
+                        ? 'border-accent text-accent'
+                        : 'border-transparent text-slate-455 hover:text-slate-200'
+                    }`}
+                  >
+                    Odoo Specific
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                  {infoActiveTab === 'pdb' ? (
+                    <div className="space-y-1">
+                      {[
+                        { cmd: 'c', desc: 'Continue execution until next breakpoint' },
+                        { cmd: 'n', desc: 'Step to the next line (step over)' },
+                        { cmd: 's', desc: 'Step into the function call' },
+                        { cmd: 'w', desc: 'Print stack trace (where)' },
+                        { cmd: 'u', desc: 'Move current frame up in stack trace' },
+                        { cmd: 'd', desc: 'Move current frame down in stack trace' },
+                        { cmd: 'l', desc: 'List source code for the current file' },
+                        { cmd: 'a', desc: 'Print the arguments of current function' },
+                        { cmd: 'p ', desc: 'Evaluate and print expression (e.g. p self)' },
+                        { cmd: 'pp ', desc: 'Pretty print expression' },
+                        { cmd: 'locals()', desc: 'Show dictionary of local variables' },
+                        { cmd: 'globals()', desc: 'Show dictionary of global variables' },
+                      ].map((item, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => {
+                            applySnippet(item.cmd);
+                            addToast({ type: 'info', message: `Inserted snippet: ${item.cmd}` });
+                          }}
+                          className="flex items-start gap-2 p-1.5 rounded hover:bg-slate-900 border border-transparent hover:border-border/10 cursor-pointer transition-all active:scale-[0.99] group text-left"
+                        >
+                          <code className="text-teal-400 font-mono text-[10px] font-bold bg-slate-950 px-1.5 py-0.5 rounded border border-border/20 group-hover:border-teal-500/30 shrink-0">
+                            {item.cmd}
+                          </code>
+                          <span className="text-[10.5px] text-slate-300 self-center leading-normal">
+                            {item.desc}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {[
+                        { cmd: '.read()', desc: 'Read fields values (returns list of dicts)' },
+                        { cmd: '.fields_get()', desc: 'Get definitions and metadata of all fields' },
+                        { cmd: '.browse()', desc: 'Returns recordset for given DB IDs (e.g. .browse([1]))' },
+                        { cmd: '.search([])', desc: 'Search records matching domain' },
+                        { cmd: '.filtered(lambda x: )', desc: 'Filters recordset using a lambda function' },
+                        { cmd: '.mapped()', desc: 'Maps field values across records (e.g. .mapped("name"))' },
+                        { cmd: 'self.env.user', desc: 'Get the current user record object' },
+                        { cmd: 'self.env.company', desc: 'Get the current company record object' },
+                        { cmd: 'self.env.context', desc: 'Get the dictionary of environment context' },
+                        { cmd: 'self.env.cr.commit()', desc: 'Commit active transaction changes to database' },
+                        { cmd: 'self.env.cr.rollback()', desc: 'Rollback current database transaction' },
+                        { cmd: "self.env[''].search([])", desc: 'Access any Odoo model and search records' },
+                        { cmd: '.ensure_one()', desc: 'Ensure recordset contains exactly one record' },
+                        { cmd: '.exists()', desc: 'Get existing records subset (filters out deleted)' },
+                      ].map((item, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => {
+                            applySnippet(item.cmd);
+                            addToast({ type: 'info', message: `Inserted snippet: ${item.cmd}` });
+                          }}
+                          className="flex items-start gap-2 p-1.5 rounded hover:bg-slate-900 border border-transparent hover:border-border/10 cursor-pointer transition-all active:scale-[0.99] group text-left"
+                        >
+                          <code className="text-amber-400 font-mono text-[10px] font-bold bg-slate-950 px-1.5 py-0.5 rounded border border-border/20 group-hover:border-amber-500/30 shrink-0">
+                            {item.cmd}
+                          </code>
+                          <span className="text-[10.5px] text-slate-300 self-center leading-normal">
+                            {item.desc}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -2927,14 +3062,14 @@ export function OdooPanel() {
                     type="button"
                     onClick={() => {
                       const defaultSnips = [
-                        { label: 'c', text: 'c', shortcut: 'c' },
-                        { label: 'n', text: 'n', shortcut: 'n' },
-                        { label: 's', text: 's', shortcut: 's' },
                         { label: '.read()', text: '.read()', shortcut: 'r' },
                         { label: '.browse()', text: '.browse()', shortcut: 'b' },
                         { label: '.search()', text: '.search([])', shortcut: 'f' },
-                        { label: 'locals()', text: 'locals()', shortcut: 'l' },
-                        { label: 'w', text: 'w', shortcut: 'w' },
+                        { label: '.fields_get()', text: '.fields_get()', shortcut: 'g' },
+                        { label: '.filtered()', text: '.filtered(lambda x: )', shortcut: 'x' },
+                        { label: 'self.env', text: "self.env[''].search([])", shortcut: 'e' },
+                        { label: '.mapped()', text: ".mapped('')", shortcut: 'm' },
+                        { label: 'cr.commit()', text: 'self.env.cr.commit()', shortcut: 'c' },
                       ];
                       saveSnippets(defaultSnips);
                     }}
