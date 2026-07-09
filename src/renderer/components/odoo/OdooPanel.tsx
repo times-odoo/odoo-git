@@ -2317,7 +2317,7 @@ export function OdooPanel() {
                     <line x1="12" y1="16" x2="12" y2="12" strokeLinecap="round" />
                     <line x1="12" y1="8" x2="12.01" y2="8" strokeLinecap="round" strokeWidth="2.5" />
                   </svg>
-                  <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 bg-[#161B22] border border-border text-[10px] text-muted p-2 rounded shadow-2xl leading-normal normal-case font-normal z-50">
+                  <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 hidden group-hover:block w-56 bg-[#161B22] border border-border text-[10px] text-muted p-2 rounded shadow-2xl leading-normal normal-case font-normal z-50">
                     Save all configuration parameters (database, port, venv, flags) under a custom name to switch projects quickly.
                   </span>
                 </span>
@@ -2384,7 +2384,7 @@ export function OdooPanel() {
                     <line x1="12" y1="16" x2="12" y2="12" strokeLinecap="round" />
                     <line x1="12" y1="8" x2="12.01" y2="8" strokeLinecap="round" strokeWidth="2.5" />
                   </svg>
-                  <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-56 bg-[#161B22] border border-border text-[10px] text-muted p-2 rounded shadow-2xl leading-normal normal-case font-normal z-50">
+                  <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 hidden group-hover:block w-56 bg-[#161B22] border border-border text-[10px] text-muted p-2 rounded shadow-2xl leading-normal normal-case font-normal z-50">
                     Selects the Python virtual environment containing the dependencies needed for this Odoo version.
                   </span>
                 </span>
@@ -2697,7 +2697,7 @@ export function OdooPanel() {
                         <line x1="12" y1="16" x2="12" y2="12" strokeLinecap="round" />
                         <line x1="12" y1="8" x2="12.01" y2="8" strokeLinecap="round" strokeWidth="2.5" />
                       </svg>
-                      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-64 bg-[#161B22] border border-border text-[10px] text-muted p-2.5 rounded shadow-2xl leading-relaxed normal-case font-normal z-50">
+                      <span className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 hidden group-hover:block w-64 bg-[#161B22] border border-border text-[10px] text-muted p-2.5 rounded shadow-2xl leading-relaxed normal-case font-normal z-50">
                         Automatically drops your target DB and creates a fresh copy from the selected template before executing the upgrade. Perfect for running migrations/upgrades repeatedly on clean data.
                       </span>
                     </span>
