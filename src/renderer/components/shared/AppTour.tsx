@@ -95,13 +95,17 @@ export function AppTour({ onClose }: AppTourProps) {
   // Update spotlight bounding rect when step or window changes
   useEffect(() => {
     const updatePosition = () => {
+      let cardWidth = cardRef.current?.getBoundingClientRect().width || 320;
+      let cardHeight = cardRef.current?.getBoundingClientRect().height || 175;
+      if (cardWidth === 0) cardWidth = 320;
+      if (cardHeight === 0) cardHeight = 175;
+
       if (!step.targetSelector) {
         setSpotlightRect(null);
         setCardStyle({
           position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
+          top: `${window.innerHeight / 2 - cardHeight / 2}px`,
+          left: `${window.innerWidth / 2 - cardWidth / 2}px`,
           zIndex: 10001,
         });
         return;
@@ -118,45 +122,41 @@ export function AppTour({ onClose }: AppTourProps) {
         const offset = 12;
         let top = 0;
         let left = 0;
-        let transform = '';
 
         if (step.position === 'bottom') {
           top = rect.bottom + offset;
-          left = rect.left + rect.width / 2;
-          transform = 'translateX(-50%)';
+          left = rect.left + rect.width / 2 - cardWidth / 2;
         } else if (step.position === 'top') {
-          top = rect.top - offset - (cardRef.current?.offsetHeight || 160);
-          left = rect.left + rect.width / 2;
-          transform = 'translateX(-50%)';
+          top = rect.top - offset - cardHeight;
+          left = rect.left + rect.width / 2 - cardWidth / 2;
         } else if (step.position === 'right') {
-          top = rect.top + rect.height / 2;
+          top = rect.top + rect.height / 2 - cardHeight / 2;
           left = rect.right + offset;
-          transform = 'translateY(-50%)';
         } else if (step.position === 'left') {
-          top = rect.top + rect.height / 2;
-          left = rect.left - offset - (cardRef.current?.offsetWidth || 320);
-          transform = 'translateY(-50%)';
+          top = rect.top + rect.height / 2 - cardHeight / 2;
+          left = rect.left - offset - cardWidth;
         }
 
-        // Screen boundary safety checks
-        const cardWidth = cardRef.current?.offsetWidth || 320;
-        const cardHeight = cardRef.current?.offsetHeight || 160;
-        if (left < 10) left = 10;
-        if (left + cardWidth > window.innerWidth - 10) {
-          left = window.innerWidth - cardWidth - 10;
-          transform = '';
+        // Screen boundary safety checks (ensuring TitleBar height of 40px is respected)
+        const titleBarHeight = 40;
+        const margin = 12;
+
+        if (left < margin) {
+          left = margin;
+        } else if (left + cardWidth > window.innerWidth - margin) {
+          left = window.innerWidth - cardWidth - margin;
         }
-        if (top < 10) top = 10;
-        if (top + cardHeight > window.innerHeight - 10) {
-          top = window.innerHeight - cardHeight - 10;
-          transform = '';
+
+        if (top < titleBarHeight + 6) {
+          top = titleBarHeight + 6;
+        } else if (top + cardHeight > window.innerHeight - margin) {
+          top = window.innerHeight - cardHeight - margin;
         }
 
         setCardStyle({
           position: 'fixed',
           top: `${top}px`,
           left: `${left}px`,
-          transform,
           zIndex: 10001,
         });
       } else {
@@ -164,9 +164,8 @@ export function AppTour({ onClose }: AppTourProps) {
         setSpotlightRect(null);
         setCardStyle({
           position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
+          top: `${window.innerHeight / 2 - cardHeight / 2}px`,
+          left: `${window.innerWidth / 2 - cardWidth / 2}px`,
           zIndex: 10001,
         });
       }
