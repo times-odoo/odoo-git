@@ -316,7 +316,7 @@ export default function App() {
   if (initialized && repos.length === 0) {
     return (
       <div className="flex flex-col h-screen">
-        <TitleBar />
+        <TitleBar onStartTour={() => useUIStore.getState().addToast({ type: 'warning', message: 'Please open a repository to start the tour.' })} />
         <div className="flex-1 flex items-center justify-center bg-bg">
           <div className="text-center space-y-4">
             <svg width="64" height="64" viewBox="0 0 24 24" fill="none" className="mx-auto text-accent opacity-40">
@@ -342,7 +342,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen">
-      <TitleBar />
+      <TitleBar onStartTour={() => setShowTour(true)} />
       <RepoRail />
 
       <div className="flex flex-1 overflow-hidden">

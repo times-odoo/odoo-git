@@ -1,6 +1,10 @@
 import React from 'react';
 
-export function TitleBar() {
+interface TitleBarProps {
+  onStartTour?: () => void;
+}
+
+export function TitleBar({ onStartTour }: TitleBarProps) {
   return (
     <div className="h-10 bg-surface border-b border-border flex items-center justify-between px-3 drag-region select-none shrink-0">
       <div className="flex items-center gap-2 no-drag">
@@ -23,8 +27,9 @@ export function TitleBar() {
         <button
           className="px-3 h-10 flex items-center justify-center gap-1.5 text-muted hover:text-accent hover:bg-border/30 transition-colors text-[11px] font-semibold"
           onClick={() => {
-            localStorage.removeItem('odoogit_hasSeenTour');
-            window.location.reload();
+            if (onStartTour) {
+              onStartTour();
+            }
           }}
           title="Start walkthrough tour"
         >
