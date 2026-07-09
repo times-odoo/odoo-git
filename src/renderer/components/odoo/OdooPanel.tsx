@@ -514,29 +514,6 @@ function AddonsPathInput({ label, value, onChange, disabled = false }: AddonsPat
   );
 }
 
-interface AddonsPathInputProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-}
-
-function AddonsPathInput({ label, value, onChange, disabled = false }: AddonsPathInputProps) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="block text-[10px] text-muted font-bold uppercase mb-1">{label}</label>
-      <input
-        type="text"
-        disabled={disabled}
-        className="w-full bg-[#0D1117]/60 text-[12px] py-1.5 px-3 border border-border rounded outline-none font-mono text-primary min-h-[34px] focus:border-accent/70 disabled:opacity-50 disabled:cursor-not-allowed"
-        placeholder="e.g. addons,../enterprise"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </div>
-  );
-}
-
 interface AddonPathRowsListProps {
   value: string;
   onChange: (value: string) => void;
@@ -588,6 +565,14 @@ function AddonPathRowsList({ value, onChange, disabled = false, communityRepoPat
       ))}
     </div>
   );
+}
+
+
+interface Completion {
+  text: string;
+  display: string;
+  type: string;
+  doc: string;
 }
 
 export function OdooPanel() {
@@ -685,8 +670,6 @@ export function OdooPanel() {
   };
 
   const [showSnippetSettings, setShowSnippetSettings] = useState(false);
-<<<<<<< Updated upstream
-=======
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoActiveTab, setInfoActiveTab] = useState<'pdb' | 'odoo'>('pdb');
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false);
@@ -694,9 +677,6 @@ export function OdooPanel() {
   const [filteredSuggestions, setFilteredSuggestions] = useState<Completion[]>([]);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
   const [hoveredSuggestion, setHoveredSuggestion] = useState<Completion | null>(null);
->>>>>>> Stashed changes
-  const [showInfoModal, setShowInfoModal] = useState(false);
-  const [infoActiveTab, setInfoActiveTab] = useState<'pdb' | 'odoo'>('pdb');
   const stdinInputRef = useRef<HTMLInputElement>(null);
   const isExecutingSilentCommandRef = useRef(false);
   const silentBufferRef = useRef<string>('');
@@ -2120,6 +2100,8 @@ export function OdooPanel() {
       });
     }
     setStdinInput('');
+    setShowSuggestions(false);
+    setHoveredSuggestion(null);
 
     if (enteredText.trim()) {
       setCommandHistory((prev) => {
@@ -2156,9 +2138,6 @@ export function OdooPanel() {
     }, 10);
   };
 
-<<<<<<< Updated upstream
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-=======
   const selectSuggestion = (item: Completion) => {
     setStdinInput((prev) => {
       const val = prev;
@@ -2331,7 +2310,6 @@ export function OdooPanel() {
       });
       return;
     }
-
     if (showSuggestions && filteredSuggestions.length > 0) {
       if (e.key === 'ArrowUp') {
         e.preventDefault();
@@ -2362,7 +2340,6 @@ export function OdooPanel() {
       return;
     }
 
->>>>>>> Stashed changes
     const matchingSnippet = snippets.find(
       (s) => s.shortcut && e.key.toLowerCase() === s.shortcut.toLowerCase()
     );
@@ -3081,6 +3058,46 @@ export function OdooPanel() {
               </div>
             )}
 
+            {/* Autocomplete Suggestions Box */}
+            {showSuggestions && filteredSuggestions.length > 0 && (
+              <div className="absolute bottom-12 left-3 z-50 w-72 bg-[#161B22] border border-border/80 rounded-md shadow-2xl flex flex-col font-sans select-none text-[11px] text-[#C9D1D9] overflow-hidden">
+                <div className="bg-slate-900 px-2 py-1 border-b border-border/20 text-[9px] text-slate-400 font-bold uppercase tracking-wider flex justify-between shrink-0">
+                  <span>Suggestions</span>
+                  <span className="font-mono text-[8px] normal-case bg-slate-950 px-1 py-0.5 rounded text-accent">Tab or Enter to select</span>
+                </div>
+                <div className="max-h-48 overflow-y-auto flex flex-col py-1 shrink-0 relative">
+                  {filteredSuggestions.map((item, idx) => {
+                    const isSelected = idx === activeSuggestionIndex;
+                    return (
+                      <div
+                        key={idx}
+                        onMouseEnter={() => {
+                          setActiveSuggestionIndex(idx);
+                          setHoveredSuggestion(item);
+                        }}
+                        onMouseLeave={() => setHoveredSuggestion(null)}
+                        onClick={() => selectSuggestion(item)}
+                        className={`flex items-center justify-between px-2.5 py-1.5 cursor-pointer text-left font-mono relative transition-colors ${
+                          isSelected ? 'bg-accent/20 text-accent font-semibold' : 'hover:bg-slate-800'
+                        }`}
+                      >
+                        <span className="truncate">{item.display}</span>
+                        <span className="text-[9px] text-muted/60 lowercase italic shrink-0 ml-2">{item.type}</span>
+
+                        {/* Tooltip detail panel - displays adjacent to the hovered item */}
+                        {isSelected && hoveredSuggestion === item && (
+                          <div className="absolute left-full top-0 ml-2 w-64 bg-[#1C2128] border border-border rounded-md shadow-xl p-2.5 font-sans text-[10.5px] leading-relaxed text-slate-350 z-50 pointer-events-none text-left whitespace-pre-wrap">
+                            <div className="font-bold font-mono text-[10px] text-slate-100 border-b border-border/20 pb-1 mb-1">{item.display}</div>
+                            {item.doc}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Stdin Input Bar */}
             {serverStatus === 'running' && (
               <form
@@ -3091,10 +3108,6 @@ export function OdooPanel() {
                 <input
                   type="text"
                   value={stdinInput}
-<<<<<<< Updated upstream
-                  onChange={(e) => setStdinInput(e.target.value)}
-                  onChange={(e) => setStdinInput(e.target.value)}
-=======
                   onChange={(e) => {
                     const val = e.target.value;
                     setStdinInput(val);
@@ -3125,7 +3138,6 @@ export function OdooPanel() {
                       setHoveredSuggestion(null);
                     }
                   }}
->>>>>>> Stashed changes
                   onKeyDown={handleKeyDown}
                   placeholder="Type input here and press Enter to send to process (e.g. for pdb breakpoint)..."
                   className="flex-1 bg-transparent border-none text-[11px] font-mono text-slate-100 focus:outline-none focus:ring-0 p-0 placeholder:text-slate-600"
