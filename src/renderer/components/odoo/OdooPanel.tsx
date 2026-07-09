@@ -1618,7 +1618,7 @@ export function OdooPanel() {
 
   // A local ref to accumulate log chunks as they come from IPC
   const logBufferRef = useRef<string[]>([]);
-  const flushTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Handle server logs and status changes from IPC
   useEffect(() => {
