@@ -14,6 +14,7 @@ interface StoreSchema {
   githubUsername: string;
   pendingDbs: string[];
   odooRootDir: string;
+  alwaysOpenSeparateTerminal?: boolean;
 }
 
 const store = new Store<StoreSchema>({
@@ -28,6 +29,7 @@ const store = new Store<StoreSchema>({
     githubUsername: '',
     pendingDbs: [],
     odooRootDir: '',
+    alwaysOpenSeparateTerminal: false,
   },
 });
 
@@ -43,6 +45,7 @@ export function getSettings() {
     githubPat: store.get('githubPat'),
     githubUsername: store.get('githubUsername'),
     odooRootDir: store.get('odooRootDir'),
+    alwaysOpenSeparateTerminal: store.get('alwaysOpenSeparateTerminal'),
   };
 }
 

@@ -56,6 +56,11 @@ function buildOdooCommand(opts: any): { execCmd: string; execArgs: string[]; ful
     args.push(`--http-port=${opts.port}`);
   }
 
+  // HTTP Interface
+  if (opts.interface) {
+    args.push(`--http-interface=${opts.interface}`);
+  }
+
   // Dev
   if (opts.devAll) {
     args.push('--dev=all');
@@ -119,13 +124,17 @@ function buildOdooCommand(opts: any): { execCmd: string; execArgs: string[]; ful
   let execCmd = './odoo-bin';
   let execArgs = args;
 
+  if (opts.shell) {
+    execArgs = ['shell', ...execArgs];
+  }
+
   if (opts.venvPath) {
     let pythonBinary = path.join(opts.venvPath, 'bin', 'python');
     if (!fs.existsSync(pythonBinary)) {
       pythonBinary = opts.venvPath;
     }
     execCmd = pythonBinary;
-    execArgs = ['./odoo-bin', ...args];
+    execArgs = ['./odoo-bin', ...execArgs];
   }
 
   const fullCommandString = `${execCmd} ${execArgs.join(' ')}`;
@@ -793,11 +802,27 @@ export function registerIpcHandlers() {
     dbPassword?: string;
     initModules?: string;
     updateModules?: string;
+    shell?: boolean;
+    interface?: string;
   }) => {
-    odooLogHistory = [];
+    const settings = getSettings();
+    const alwaysOpenSeparateTerminal = settings.alwaysOpenSeparateTerminal === true;
+
+    if (alwaysOpenSeparateTerminal) {
+      odooLogHistory = [];
+    }
+
     if (odooProcess) {
       appendAndSendLog('[App] Stopping already running Odoo server...\n', event.sender);
-      odooProcess.kill('SIGINT');
+      try {
+        if (odooProcess.pid) {
+          process.kill(-odooProcess.pid, 'SIGINT');
+        }
+      } catch {
+        try {
+          odooProcess.kill('SIGINT');
+        } catch {}
+      }
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
@@ -824,36 +849,77 @@ export function registerIpcHandlers() {
     const odooEnv: NodeJS.ProcessEnv = {
       ...process.env,
       PYTHONUNBUFFERED: '1',
+      PROMPT_TOOLKIT_NO_CPR: '1',
     };
     if (opts.dbPassword) {
       odooEnv.PGPASSWORD = opts.dbPassword;
     }
 
-    odooProcess = spawn(execCmd, execArgs, {
-      cwd: opts.repoPath,
-      shell: true,
-      detached: true,
-      env: odooEnv
-    });
+    if (alwaysOpenSeparateTerminal) {
+      const envVars = opts.dbPassword ? `PGPASSWORD=${JSON.stringify(opts.dbPassword)} ` : '';
+      const fullCmd = `${envVars}${fullCommandString}`;
+      const termArgs = ['--disable-factory', '--working-directory', opts.repoPath, '--', 'bash', '-c', `${fullCmd}; exec bash`];
+      
+      odooProcess = spawn('gnome-terminal', termArgs, {
+        cwd: opts.repoPath,
+        shell: false,
+        detached: true,
+        env: odooEnv
+      });
 
-    odooStatus = 'running';
-    event.sender.send('odoo:state', { status: 'running', cmd: fullCommandString });
+      odooStatus = 'running';
+      event.sender.send('odoo:state', { status: 'running', cmd: fullCommandString });
+    } else {
+      let finalCmd = execCmd;
+      let finalArgs = execArgs;
+      let useShell = true;
 
-    odooProcess.stdout?.on('data', (data) => {
-      const out = data.toString();
-      if (out.includes('Password for user')) {
-        odooProcess?.stdin?.write((opts.dbPassword || '') + '\n');
+      if (opts.shell) {
+        let pythonBinary = 'python3';
+        if (opts.venvPath) {
+          let venvPython = path.join(opts.venvPath, 'bin', 'python');
+          if (fs.existsSync(venvPython)) {
+            pythonBinary = venvPython;
+          } else {
+            pythonBinary = opts.venvPath;
+          }
+        }
+        
+        const targetArgs = opts.venvPath ? execArgs : ['./odoo-bin', ...execArgs];
+        const escapedArgs = targetArgs.map(arg => `'${arg.replace(/'/g, "\\'")}'`).join(', ');
+        const ptyScript = `import pty; pty.spawn([${escapedArgs}])`;
+        
+        finalCmd = pythonBinary;
+        finalArgs = ['-c', ptyScript];
+        useShell = false;
       }
-      appendAndSendLog(out, event.sender);
-    });
 
-    odooProcess.stderr?.on('data', (data) => {
-      const out = data.toString();
-      if (out.includes('Password for user')) {
-        odooProcess?.stdin?.write((opts.dbPassword || '') + '\n');
-      }
-      appendAndSendLog(out, event.sender);
-    });
+      odooProcess = spawn(finalCmd, finalArgs, {
+        cwd: opts.repoPath,
+        shell: useShell,
+        detached: true,
+        env: odooEnv
+      });
+
+      odooStatus = 'running';
+      event.sender.send('odoo:state', { status: 'running', cmd: fullCommandString });
+
+      odooProcess.stdout?.on('data', (data) => {
+        const out = data.toString();
+        if (out.includes('Password for user')) {
+          odooProcess?.stdin?.write((opts.dbPassword || '') + '\n');
+        }
+        appendAndSendLog(out, event.sender);
+      });
+
+      odooProcess.stderr?.on('data', (data) => {
+        const out = data.toString();
+        if (out.includes('Password for user')) {
+          odooProcess?.stdin?.write((opts.dbPassword || '') + '\n');
+        }
+        appendAndSendLog(out, event.sender);
+      });
+    }
 
     odooProcess.on('close', (code) => {
       appendAndSendLog(`\n[App] Odoo process exited with code ${code}\n`, event.sender);
@@ -875,33 +941,49 @@ export function registerIpcHandlers() {
   });
 
   ipcMain.handle('odoo:stopServer', async (event) => {
+    const settings = getSettings();
+    const alwaysOpenSeparateTerminal = settings.alwaysOpenSeparateTerminal === true;
+
     if (odooProcess) {
       appendAndSendLog('\n[App] Stopping Odoo Server...\n', event.sender);
-      try {
-        odooProcess.stdin?.write('\x03');
-      } catch {}
-      try {
-        if (odooProcess.pid) {
-          process.kill(-odooProcess.pid, 'SIGINT');
-        }
-      } catch {
-        try {
-          odooProcess.kill('SIGINT');
-        } catch {}
-      }
 
-      const procToKill = odooProcess;
-      setTimeout(() => {
+      if (alwaysOpenSeparateTerminal) {
         try {
-          if (procToKill.pid) {
-            process.kill(-procToKill.pid, 'SIGKILL');
+          if (odooProcess.pid) {
+            process.kill(-odooProcess.pid, 'SIGINT');
           }
         } catch {
           try {
-            procToKill.kill('SIGKILL');
+            odooProcess.kill('SIGINT');
           } catch {}
         }
-      }, 3000);
+      } else {
+        try {
+          odooProcess.stdin?.write('\x03');
+        } catch {}
+        try {
+          if (odooProcess.pid) {
+            process.kill(-odooProcess.pid, 'SIGINT');
+          }
+        } catch {
+          try {
+            odooProcess.kill('SIGINT');
+          } catch {}
+        }
+
+        const procToKill = odooProcess;
+        setTimeout(() => {
+          try {
+            if (procToKill.pid) {
+              process.kill(-procToKill.pid, 'SIGKILL');
+            }
+          } catch {
+            try {
+              procToKill.kill('SIGKILL');
+            } catch {}
+          }
+        }, 3000);
+      }
       return true;
     }
     return false;

@@ -5,9 +5,29 @@ import { useUIStore } from '../../store/ui';
 import { Dropdown } from '../shared/Dropdown';
 import { DbDropdown } from '../shared/DbDropdown';
 import { useGit } from '../../hooks/useGit';
+interface LogLine {
+  id: number;
+  text: string;
+  unfinished?: boolean;
+}
 
 const stripAnsi = (str: string) => {
   return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+};
+
+const resolveCarriageReturns = (text: string): { text: string; isOverwrite: boolean } => {
+  const isOverwrite = text.startsWith('\r');
+  const parts = text.split('\r');
+  let result = '';
+  for (const part of parts) {
+    if (part === '') continue;
+    if (result === '') {
+      result = part;
+    } else {
+      result = part + result.slice(part.length);
+    }
+  }
+  return { text: result, isOverwrite };
 };
 
 const ODOO_LOG_REGEX = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\s+(\d+)\s+(INFO|WARNING|ERROR|DEBUG|CRITICAL)\s+(\S+)\s+([\w\.\-]+):\s*(.*)$/;
@@ -79,6 +99,48 @@ const TerminalLine = React.memo(({ line }: { line: string }) => {
 
   const match = line.match(ODOO_LOG_REGEX);
   if (!match) {
+    // IPython Input Prompt: In [1]: command
+    const ipythonInMatch = line.match(/^In\s*\[(\d+)\]:\s*(.*)$/);
+    if (ipythonInMatch) {
+      const [_, num, cmdText] = ipythonInMatch;
+      return (
+        <div className="font-mono text-[11px] py-[1.5px] leading-relaxed select-text">
+          <span className="text-emerald-400 font-bold select-none">In [</span>
+          <span className="text-emerald-300 font-bold select-none">{num}</span>
+          <span className="text-emerald-400 font-bold select-none">]: </span>
+          <span className="text-slate-100 font-semibold">{cmdText}</span>
+        </div>
+      );
+    }
+
+    // IPython Output Prompt: Out[1]: result
+    const ipythonOutMatch = line.match(/^Out\s*\[(\d+)\]:\s*(.*)$/);
+    if (ipythonOutMatch) {
+      const [_, num, resText] = ipythonOutMatch;
+      return (
+        <div className="font-mono text-[11px] py-[1.5px] leading-relaxed select-text">
+          <span className="text-rose-500 font-bold select-none">Out[</span>
+          <span className="text-rose-400 font-bold select-none">{num}</span>
+          <span className="text-rose-500 font-bold select-none">]: </span>
+          <span className="text-amber-200/90 font-medium">{resText}</span>
+        </div>
+      );
+    }
+
+    // Python standard prompt: >>> command or ... command
+    const pythonPromptMatch = line.match(/^(>>>|\.\.\.)\s*(.*)$/);
+    if (pythonPromptMatch) {
+      const [_, prompt, cmdText] = pythonPromptMatch;
+      const isPrimary = prompt === '>>>';
+      const promptColor = isPrimary ? 'text-teal-400' : 'text-slate-500';
+      return (
+        <div className="font-mono text-[11px] py-[1.5px] leading-relaxed select-text">
+          <span className={`${promptColor} font-bold select-none mr-2`}>{prompt}</span>
+          <span className="text-slate-100 font-semibold">{cmdText}</span>
+        </div>
+      );
+    }
+
     // 1. (Pdb) prompt
     if (line.trim() === '(Pdb)') {
       return (
@@ -550,7 +612,8 @@ export function OdooPanel() {
   // Server State
   const [serverStatus, setServerStatus] = useState<'starting' | 'running' | 'stopped'>('stopped');
   const [runningCmd, setRunningCmd] = useState('');
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<LogLine[]>([]);
+  const lineCounterRef = useRef(0);
   const [stdinInput, setStdinInput] = useState('');
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -571,21 +634,7 @@ export function OdooPanel() {
     shouldAutoScrollRef.current = isAtBottom;
   };
 
-  const processedLines = useMemo(() => {
-    const lines: string[] = [];
-    for (let i = 0; i < logs.length; i++) {
-      const parts = logs[i].split('\n');
-      for (let j = 0; j < parts.length; j++) {
-        const part = parts[j];
-        if (j === parts.length - 1 && part === '') continue;
-        lines.push(part);
-      }
-    }
-    if (lines.length > 1000) {
-      return lines.slice(lines.length - 1000);
-    }
-    return lines;
-  }, [logs]);
+  const processedLines = logs;
   const [activeTab, setActiveTab] = useState<'run' | 'upgrade' | 'test'>('run');
 
   // Creation/Duplication Modals
@@ -660,6 +709,10 @@ export function OdooPanel() {
   });
   const [runCustomCommand, setRunCustomCommand] = useState(() => {
     return localStorage.getItem('odoo_runCustomCommand') ?? '';
+  });
+  const [runShell, setRunShell] = useState(() => {
+    const saved = localStorage.getItem('odoo_runShell');
+    return saved !== null ? saved === 'true' : false;
   });
 
   // Upgrade Form
@@ -808,6 +861,7 @@ export function OdooPanel() {
     runCustomArgs?: string;
     runUseCustomCommand?: boolean;
     runCustomCommand?: string;
+    runShell?: boolean;
     // upgrade
     upUpgradePaths?: string;
     upAddons?: string;
@@ -1104,6 +1158,10 @@ export function OdooPanel() {
       setRunCustomCommand(preset.runCustomCommand);
       localStorage.setItem('odoo_runCustomCommand', preset.runCustomCommand);
     }
+    if (preset.runShell !== undefined) {
+      setRunShell(preset.runShell);
+      localStorage.setItem('odoo_runShell', String(preset.runShell));
+    }
 
     // Upgrade Tab
     if (preset.upUpgradePaths !== undefined) {
@@ -1257,6 +1315,7 @@ export function OdooPanel() {
       runCustomArgs,
       runUseCustomCommand,
       runCustomCommand,
+      runShell,
       // upgrade
       upUpgradePaths,
       upAddons,
@@ -1321,6 +1380,7 @@ export function OdooPanel() {
       runCustomArgs,
       runUseCustomCommand,
       runCustomCommand,
+      runShell,
       // upgrade
       upUpgradePaths,
       upAddons,
@@ -1464,6 +1524,9 @@ export function OdooPanel() {
       if (port && port !== 8069) {
         args.push('--http-port', port.toString());
       }
+      if (runInterface) {
+        args.push('--http-interface', runInterface);
+      }
       if (initModules.length > 0) {
         args.push('-i', initModules.join(','));
       }
@@ -1513,16 +1576,20 @@ export function OdooPanel() {
     let execCmd = './odoo-bin';
     let execArgs = args;
 
+    if (activeTab === 'run' && runShell) {
+      execArgs = ['shell', ...execArgs];
+    }
+
     if (selectedVenv) {
       execCmd = selectedVenv.endsWith('python') ? selectedVenv : `${selectedVenv}/bin/python`;
-      execArgs = ['./odoo-bin', ...args];
+      execArgs = ['./odoo-bin', ...execArgs];
     }
 
     return `${execCmd} ${execArgs.join(' ')}`;
   }, [
     activeTab,
     runDbName, runPort, runInterface, runAddons, runInstallModules, runUpdateModules, runDevAll, runWithDemo, runStopAfterInit, runCustomArgs,
-    runUseCustomCommand, runCustomCommand,
+    runUseCustomCommand, runCustomCommand, runShell,
     upDbName, upUpgradePaths, upAddons, upUpdateModules, upRestoreTemplate, upTemplateDb, upStopAfterInit, upCustomArgs,
     upUseCustomCommand, upCustomCommand,
     testAddons, testDbName, testModules, testUpdateModules, testTags, testPort, testStopAfterInit, testCustomArgs,
@@ -1551,6 +1618,7 @@ export function OdooPanel() {
     localStorage.setItem('odoo_runCustomArgs', runCustomArgs);
     localStorage.setItem('odoo_runUseCustomCommand', runUseCustomCommand.toString());
     localStorage.setItem('odoo_runCustomCommand', runCustomCommand);
+    localStorage.setItem('odoo_runShell', runShell.toString());
 
     localStorage.setItem('odoo_upDbName', upDbName);
     localStorage.setItem('odoo_upUpgradePaths', upUpgradePaths);
@@ -1575,7 +1643,7 @@ export function OdooPanel() {
     localStorage.setItem('odoo_testCustomCommand', testCustomCommand);
   }, [
     runPort, runDbName, runInterface, runAddons, runInstallModules, runUpdateModules, runDevAll, runWithDemo, runStopAfterInit, runCustomArgs,
-    runUseCustomCommand, runCustomCommand,
+    runUseCustomCommand, runCustomCommand, runShell,
     upDbName, upUpgradePaths, upAddons, upUpdateModules, upRestoreTemplate, upTemplateDb, upStopAfterInit, upCustomArgs,
     upUseCustomCommand, upCustomCommand,
     testAddons, testDbName, testModules, testUpdateModules, testTags, testPort, testStopAfterInit, testCustomArgs,
@@ -1616,7 +1684,47 @@ export function OdooPanel() {
       // Retrieve log history from main process
       const history = await window.odoo.getLogHistory();
       if (history && history.length > 0) {
-        setLogs(history.map((text) => stripAnsi(text)));
+        const initialLines: LogLine[] = [];
+        for (const chunk of history) {
+          const cleanChunk = stripAnsi(chunk);
+          const endsWithNewline = cleanChunk.endsWith('\n');
+          const parts = cleanChunk.split('\n');
+          
+          for (let j = 0; j < parts.length; j++) {
+            const part = parts[j];
+            const isLastPart = j === parts.length - 1;
+            if (isLastPart && endsWithNewline && part === '') continue;
+
+            const partUnfinished = isLastPart && !endsWithNewline;
+            const { text: resolvedText, isOverwrite } = resolveCarriageReturns(part);
+
+            const lastLine = initialLines[initialLines.length - 1];
+            if (lastLine && lastLine.unfinished) {
+              const shouldOverwrite = isOverwrite || (lastLine.text && resolvedText.startsWith(lastLine.text));
+              if (shouldOverwrite) {
+                initialLines[initialLines.length - 1] = {
+                  id: lastLine.id,
+                  text: resolvedText,
+                  unfinished: partUnfinished
+                };
+              } else {
+                initialLines[initialLines.length - 1] = {
+                  id: lastLine.id,
+                  text: lastLine.text + resolvedText,
+                  unfinished: partUnfinished
+                };
+              }
+            } else {
+              initialLines.push({
+                id: lineCounterRef.current++,
+                text: resolvedText,
+                unfinished: partUnfinished
+              });
+            }
+          }
+        }
+        const limited = initialLines.slice(Math.max(0, initialLines.length - 1000));
+        setLogs(limited);
       }
     };
     init();
@@ -1640,7 +1748,43 @@ export function OdooPanel() {
           flushTimerRef.current = null;
 
           setLogs((prev) => {
-            let next = [...prev, ...newChunks];
+            let next = [...prev];
+            for (const chunk of newChunks) {
+              const endsWithNewline = chunk.endsWith('\n');
+              const parts = chunk.split('\n');
+              for (let j = 0; j < parts.length; j++) {
+                const part = parts[j];
+                const isLastPart = j === parts.length - 1;
+                if (isLastPart && endsWithNewline && part === '') continue;
+
+                const partUnfinished = isLastPart && !endsWithNewline;
+                const { text: resolvedText, isOverwrite } = resolveCarriageReturns(part);
+
+                const lastLine = next[next.length - 1];
+                if (lastLine && lastLine.unfinished) {
+                  const shouldOverwrite = isOverwrite || (lastLine.text && resolvedText.startsWith(lastLine.text));
+                  if (shouldOverwrite) {
+                    next[next.length - 1] = {
+                      id: lastLine.id,
+                      text: resolvedText,
+                      unfinished: partUnfinished
+                    };
+                  } else {
+                    next[next.length - 1] = {
+                      id: lastLine.id,
+                      text: lastLine.text + resolvedText,
+                      unfinished: partUnfinished
+                    };
+                  }
+                } else {
+                  next.push({
+                    id: lineCounterRef.current++,
+                    text: resolvedText,
+                    unfinished: partUnfinished
+                  });
+                }
+              }
+            }
             if (next.length > 1000) {
               next = next.slice(next.length - 1000);
             }
@@ -1857,7 +2001,25 @@ export function OdooPanel() {
     e.preventDefault();
 
     const enteredText = stdinInput;
-    setLogs((prev) => [...prev, `> ${enteredText}\n`]);
+    if (!runShell) {
+      setLogs((prev) => {
+        const added: LogLine[] = [];
+        const parts = `> ${enteredText}\n`.split('\n');
+        for (let j = 0; j < parts.length; j++) {
+          const part = parts[j];
+          if (j === parts.length - 1 && part === '') continue;
+          added.push({
+            id: lineCounterRef.current++,
+            text: part,
+          });
+        }
+        let next = [...prev, ...added];
+        if (next.length > 1000) {
+          next = next.slice(next.length - 1000);
+        }
+        return next;
+      });
+    }
     setStdinInput('');
 
     if (enteredText.trim()) {
@@ -1952,13 +2114,41 @@ export function OdooPanel() {
     // Handle template restoration prior to running upgrade
     if (activeTab === 'upgrade' && upRestoreTemplate && upTemplateDb && targetDb) {
       try {
-        setLogs([`[App] Re-creating database "${targetDb}" from template "${upTemplateDb}"...\n`]);
+        const initialLines: LogLine[] = [];
+        const text1 = `[App] Re-creating database "${targetDb}" from template "${upTemplateDb}"...\n`;
+        const parts1 = text1.split('\n');
+        for (let j = 0; j < parts1.length; j++) {
+          const part = parts1[j];
+          if (j === parts1.length - 1 && part === '') continue;
+          initialLines.push({
+            id: lineCounterRef.current++,
+            text: part,
+          });
+        }
+        setLogs(initialLines);
         setServerStatus('starting');
         try {
           await window.odoo.dropDb(targetDb, dbUser, dbHost, dbPassword);
         } catch {} // ignore error if database doesn't exist
         await window.odoo.createDb(targetDb, upTemplateDb, dbUser, dbHost, dbPassword);
-        setLogs((prev) => [...prev, `[App] Database duplication finished. Launching upgrade run...\n\n`]);
+        setLogs((prev) => {
+          const added: LogLine[] = [];
+          const text2 = `[App] Database duplication finished. Launching upgrade run...\n\n`;
+          const parts2 = text2.split('\n');
+          for (let j = 0; j < parts2.length; j++) {
+            const part = parts2[j];
+            if (j === parts2.length - 1 && part === '') continue;
+            added.push({
+              id: lineCounterRef.current++,
+              text: part,
+            });
+          }
+          let next = [...prev, ...added];
+          if (next.length > 1000) {
+            next = next.slice(next.length - 1000);
+          }
+          return next;
+        });
       } catch (err: any) {
         addToast({ type: 'error', message: `Template restoration failed: ${err.message}` });
         setServerStatus('stopped');
@@ -1993,6 +2183,7 @@ export function OdooPanel() {
           customArgs: runCustomArgs,
           useCustomCommand: runUseCustomCommand,
           customCommand: runCustomCommand || undefined,
+          shell: runShell,
         };
       } else if (activeTab === 'upgrade') {
         opts = {
@@ -2075,6 +2266,7 @@ export function OdooPanel() {
         customArgs: runCustomArgs,
         useCustomCommand: runUseCustomCommand,
         customCommand: runCustomCommand || undefined,
+        shell: runShell,
       };
     } else if (activeTab === 'upgrade') {
       opts = {
@@ -2238,7 +2430,7 @@ export function OdooPanel() {
                 </button>
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(logs.join(''));
+                    navigator.clipboard.writeText(logs.map((l) => l.text).join('\n'));
                     addToast({ type: 'info', message: 'Logs copied to clipboard.' });
                   }}
                   className="text-slate-400 hover:text-white text-[9px] transition-colors"
@@ -2261,7 +2453,7 @@ export function OdooPanel() {
               {processedLines.length === 0 ? (
                 <div className="text-slate-500 italic py-4 text-center">No terminal logs recorded yet. Start server to stream output.</div>
               ) : (
-                processedLines.map((line, idx) => <TerminalLine key={idx} line={line} />)
+                processedLines.map((logLine) => <TerminalLine key={logLine.id} line={logLine.text} />)
               )}
               <div ref={terminalEndRef} />
             </div>
@@ -2552,7 +2744,7 @@ export function OdooPanel() {
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 py-1.5">
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2 py-1.5">
                   <label className={`flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none ${runUseCustomCommand ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}>
                     <input
                       type="checkbox"
@@ -2582,6 +2774,16 @@ export function OdooPanel() {
                       className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     Stop after init
+                  </label>
+                  <label className={`flex items-center gap-1.5 text-[11px] text-primary cursor-pointer select-none ${runUseCustomCommand ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`} title="Run Odoo interactive shell preloaded with database and environment">
+                    <input
+                      type="checkbox"
+                      disabled={runUseCustomCommand}
+                      checked={runShell}
+                      onChange={(e) => setRunShell(e.target.checked)}
+                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    shell
                   </label>
                 </div>
 

@@ -10,6 +10,7 @@ export function SettingsPanel() {
   const addToast = useUIStore((s) => s.addToast);
   const [trigram, setTrigram] = useState('');
   const [defaultVersion, setDefaultVersion] = useState('master');
+  const [alwaysOpenSeparateTerminal, setAlwaysOpenSeparateTerminal] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // GitHub PAT state
@@ -82,6 +83,7 @@ export function SettingsPanel() {
       setDefaultVersion(settings.defaultVersion || 'master');
       setGithubUsername(settings.githubUsername || '');
       setGithubPat(settings.githubPat || '');
+      setAlwaysOpenSeparateTerminal(settings.alwaysOpenSeparateTerminal || false);
       if (settings.githubPat) {
         setPatSaved(true);
       }
@@ -125,7 +127,11 @@ export function SettingsPanel() {
 
   const handleSave = async () => {
     try {
-      await window.git.saveSettings({ trigram, defaultVersion } as any);
+      await window.git.saveSettings({
+        trigram,
+        defaultVersion,
+        alwaysOpenSeparateTerminal,
+      } as any);
       addToast({ message: 'Settings saved', type: 'success' });
     } catch (e: any) {
       addToast({ message: 'Failed to save settings', type: 'error' });
@@ -511,6 +517,28 @@ export function SettingsPanel() {
                     searchable={true}
                     className="w-48"
                   />
+                </div>
+
+                {/* Odoo Server Terminal Preferences */}
+                <div className="border-t border-border/50 pt-4 space-y-3">
+                  <span className="text-[11px] font-bold text-muted uppercase tracking-wider block">Odoo Server Terminal</span>
+                  
+                  <label className="flex items-start gap-2.5 text-[12px] text-primary cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={alwaysOpenSeparateTerminal}
+                      onChange={(e) => {
+                        setAlwaysOpenSeparateTerminal(e.target.checked);
+                      }}
+                      className="rounded border-border text-accent cursor-pointer focus:ring-accent bg-bg mt-0.5"
+                    />
+                    <div>
+                      <span className="font-semibold block">Always open server in separate terminal</span>
+                      <span className="text-[11px] text-muted block mt-0.5">
+                        Spawn Odoo server processes in an external system terminal window (Gnome Terminal).
+                      </span>
+                    </div>
+                  </label>
                 </div>
 
                 <button className="btn-accent" onClick={handleSave}>

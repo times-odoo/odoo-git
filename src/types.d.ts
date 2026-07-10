@@ -91,6 +91,7 @@ export interface AppSettings {
   githubPat: string;
   githubUsername: string;
   odooRootDir: string;
+  alwaysOpenSeparateTerminal?: boolean;
 }
 
 export type PushResult = {
@@ -215,6 +216,8 @@ export interface OdooAPI {
     updateModules?: string;
     useCustomCommand?: boolean;
     customCommand?: string;
+    shell?: boolean;
+    interface?: string;
   }): Promise<void>;
   stopServer(): Promise<void>;
   getServerStatus(): Promise<{ status: 'starting' | 'running' | 'stopped'; cmd?: string; error?: string }>;
