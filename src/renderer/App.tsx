@@ -6,6 +6,9 @@ import { useGit } from './hooks/useGit';
 import { useRepo } from './hooks/useRepo';
 
 // Layout
+import { ThemeProvider } from './components/shared/ThemeProvider';
+import { Sidebar } from './components/layout/Sidebar';
+import { TopBar } from './components/layout/TopBar';
 import { TitleBar } from './components/layout/TitleBar';
 import { RepoRail } from './components/layout/RepoRail';
 import { StatusBar } from './components/layout/StatusBar';
@@ -341,131 +344,133 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
-      <TitleBar onStartTour={() => setShowTour(true)} />
-      <RepoRail />
+    <ThemeProvider>
+      <div className="flex flex-col h-screen">
+        <TitleBar onStartTour={() => setShowTour(true)} />
+        <RepoRail />
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Main Content Area */}
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <div className="flex flex-1 overflow-hidden">
-            {/* Navigation Sidebar */}
-            {activePanel !== 'settings' && activePanel !== 'odoo' && (
-              <div className="w-44 bg-surface border-r border-border flex flex-col shrink-0 tour-nav-sidebar">
-                {/* Current Branch Header */}
-                {status && (
-                  <div className="p-3 border-b border-border">
-                    <div className="section-header mb-1">CURRENT BRANCH</div>
-                    <div className="font-mono text-accent text-[13px] truncate" title={status.current || ''}>
-                      {status.current || 'detached'}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Main Content Area */}
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex flex-1 overflow-hidden">
+              {/* Navigation Sidebar */}
+              {activePanel !== 'settings' && activePanel !== 'odoo' && (
+                <div className="w-44 bg-surface border-r border-border flex flex-col shrink-0 tour-nav-sidebar">
+                  {/* Current Branch Header */}
+                  {status && (
+                    <div className="p-3 border-b border-border">
+                      <div className="section-header mb-1">CURRENT BRANCH</div>
+                      <div className="font-mono text-accent text-[13px] truncate" title={status.current || ''}>
+                        {status.current || 'detached'}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 text-[11px]">
+                        {status.tracking && (
+                          <span className="text-muted truncate">{status.tracking}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 text-[11px] font-mono">
+                        {status.ahead > 0 && <span className="text-success">↑{status.ahead}</span>}
+                        {status.behind > 0 && <span className="text-danger">↓{status.behind}</span>}
+                        {status.isClean ? (
+                          <span className="text-muted">clean</span>
+                        ) : (
+                          <span className="text-warning">dirty</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-1 text-[11px]">
-                      {status.tracking && (
-                        <span className="text-muted truncate">{status.tracking}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1 text-[11px] font-mono">
-                      {status.ahead > 0 && <span className="text-success">↑{status.ahead}</span>}
-                      {status.behind > 0 && <span className="text-danger">↓{status.behind}</span>}
-                      {status.isClean ? (
-                        <span className="text-muted">clean</span>
+                  )}
+
+                  {/* Fetch Button */}
+                  <div className="px-3 py-2 border-b border-border">
+                    <button
+                      className={`btn-surface w-full justify-center text-[12px] ${isLoading?.fetch ? 'opacity-60' : ''}`}
+                      onClick={() => fetchRepo()}
+                      disabled={isLoading?.fetch}
+                    >
+                      {isLoading?.fetch ? (
+                        <>
+                          <svg className="spinner" width="12" height="12" viewBox="0 0 14 14" fill="none">
+                            <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="20 12" />
+                          </svg>
+                          Fetching...
+                        </>
                       ) : (
-                        <span className="text-warning">dirty</span>
+                        <>
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                            <path d="M6 9V3M4 5L6 3L8 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M2 8V9C2 9.6 2.4 10 3 10H9C9.6 10 10 9.6 10 9V8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                          </svg>
+                          Fetch All
+                        </>
                       )}
+                    </button>
+                  </div>
+
+                  {/* Nav Items */}
+                  <nav className="flex-1 overflow-y-auto py-1">
+                    {NAV_ITEMS.map((item) => (
+                      <button
+                        key={item.panel}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] transition-colors ${
+                          activePanel === item.panel
+                            ? 'text-accent bg-accent/8 border-r-2 border-accent'
+                            : 'text-muted hover:text-primary hover:bg-border/20'
+                        }`}
+                        onClick={() => setActivePanel(item.panel)}
+                      >
+                        <span className={activePanel === item.panel ? 'text-accent' : ''}>{item.icon}</span>
+                        {item.label}
+                      </button>
+                    ))}
+                  </nav>
+                </div>
+              )}
+
+              {/* Main Panel */}
+              <div className="flex-1 overflow-hidden bg-bg relative tour-main-panel">
+                {/* Odoo Panel (kept mounted to preserve state & logs) */}
+                <div className={`h-full w-full ${activePanel === 'odoo' ? 'block' : 'hidden'}`}>
+                  <OdooPanel />
+                </div>
+                {activePanel !== 'odoo' && renderPanel()}
+
+                {/* Premium Glassmorphic Loading Overlay */}
+                {activePanel !== 'odoo' && (isLoading?.checkout || isLoading?.pull || isLoading?.rebase || isLoading?.cherryPick || isLoading?.createBranch) && (
+                  <div className="absolute inset-0 bg-bg/50 backdrop-blur-sm flex flex-col items-center justify-center z-50 transition-all duration-300">
+                    <div className="bg-surface/90 border border-border/80 rounded-xl p-6 flex flex-col items-center gap-3.5 shadow-2xl min-w-[200px] transform scale-100 animate-in fade-in zoom-in duration-200">
+                      <div className="relative w-8 h-8 flex items-center justify-center">
+                        <svg className="animate-spin text-accent" width="28" height="28" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      </div>
+                      <span className="text-[13px] font-medium text-primary tracking-wide">
+                        {isLoading?.checkout
+                          ? 'Switching branch...'
+                          : isLoading?.pull
+                          ? 'Pulling changes...'
+                          : isLoading?.rebase
+                          ? 'Rebasing branch...'
+                          : isLoading?.createBranch
+                          ? 'Creating branch...'
+                          : 'Cherry-picking commits...'}
+                      </span>
                     </div>
                   </div>
                 )}
-
-                {/* Fetch Button */}
-                <div className="px-3 py-2 border-b border-border">
-                  <button
-                    className={`btn-surface w-full justify-center text-[12px] ${isLoading?.fetch ? 'opacity-60' : ''}`}
-                    onClick={() => fetchRepo()}
-                    disabled={isLoading?.fetch}
-                  >
-                    {isLoading?.fetch ? (
-                      <>
-                        <svg className="spinner" width="12" height="12" viewBox="0 0 14 14" fill="none">
-                          <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="20 12" />
-                        </svg>
-                        Fetching...
-                      </>
-                    ) : (
-                      <>
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                          <path d="M6 9V3M4 5L6 3L8 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                          <path d="M2 8V9C2 9.6 2.4 10 3 10H9C9.6 10 10 9.6 10 9V8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                        </svg>
-                        Fetch All
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Nav Items */}
-                <nav className="flex-1 overflow-y-auto py-1">
-                  {NAV_ITEMS.map((item) => (
-                    <button
-                      key={item.panel}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] transition-colors ${
-                        activePanel === item.panel
-                          ? 'text-accent bg-accent/8 border-r-2 border-accent'
-                          : 'text-muted hover:text-primary hover:bg-border/20'
-                      }`}
-                      onClick={() => setActivePanel(item.panel)}
-                    >
-                      <span className={activePanel === item.panel ? 'text-accent' : ''}>{item.icon}</span>
-                      {item.label}
-                    </button>
-                  ))}
-                </nav>
               </div>
-            )}
-
-            {/* Main Panel */}
-            <div className="flex-1 overflow-hidden bg-bg relative tour-main-panel">
-              {/* Odoo Panel (kept mounted to preserve state & logs) */}
-              <div className={`h-full w-full ${activePanel === 'odoo' ? 'block' : 'hidden'}`}>
-                <OdooPanel />
-              </div>
-              {activePanel !== 'odoo' && renderPanel()}
-
-              {/* Premium Glassmorphic Loading Overlay */}
-              {activePanel !== 'odoo' && (isLoading?.checkout || isLoading?.pull || isLoading?.rebase || isLoading?.cherryPick || isLoading?.createBranch) && (
-                <div className="absolute inset-0 bg-bg/50 backdrop-blur-sm flex flex-col items-center justify-center z-50 transition-all duration-300">
-                  <div className="bg-surface/90 border border-border/80 rounded-xl p-6 flex flex-col items-center gap-3.5 shadow-2xl min-w-[200px] transform scale-100 animate-in fade-in zoom-in duration-200">
-                    <div className="relative w-8 h-8 flex items-center justify-center">
-                      <svg className="animate-spin text-accent" width="28" height="28" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                    </div>
-                    <span className="text-[13px] font-medium text-primary tracking-wide">
-                      {isLoading?.checkout
-                        ? 'Switching branch...'
-                        : isLoading?.pull
-                        ? 'Pulling changes...'
-                        : isLoading?.rebase
-                        ? 'Rebasing branch...'
-                        : isLoading?.createBranch
-                        ? 'Creating branch...'
-                        : 'Cherry-picking commits...'}
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
+
+            {/* Terminal Drawer */}
+            {terminalOpen && <TerminalPanel />}
           </div>
-
-          {/* Terminal Drawer */}
-          {terminalOpen && <TerminalPanel />}
         </div>
-      </div>
 
-      <StatusBar />
-      <Toast />
-      <Modal />
-      {showTour && <AppTour onClose={() => setShowTour(false)} />}
-    </div>
+        <StatusBar />
+        <Toast />
+        <Modal />
+        {showTour && <AppTour onClose={() => setShowTour(false)} />}
+      </div>
+    </ThemeProvider>
   );
 }

@@ -6,6 +6,11 @@
 
 @layer base {
   :root {
+    --color-bg: #0F1117;
+    --color-surface: #161B22;
+    --color-border: #21262D;
+    --color-muted: #6E7681;
+    --color-primary: #E6EDF3;
     --color-accent: 139, 76, 241;
     --color-accent-hover: 121, 59, 232;
   }
@@ -41,8 +46,8 @@
 
   body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    background: #0F1117;
-    color: #E6EDF3;
+    background: var(--color-bg);
+    color: var(--color-primary);
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

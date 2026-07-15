@@ -12,11 +12,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: '#0F1117',
-        surface: '#161B22',
-        border: '#21262D',
-        muted: '#6E7681',
-        primary: '#E6EDF3',
+        bg: 'var(--color-bg)',
+        surface: 'var(--color-surface)',
+        border: 'var(--color-border)',
+        muted: 'var(--color-muted)',
+        primary: 'var(--color-primary)',
         accent: withOpacity('--color-accent'),
         'accent-hover': withOpacity('--color-accent-hover'),
         success: '#238636',

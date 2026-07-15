@@ -76,6 +76,8 @@ interface UIStore {
   addTerminalLog: (log: Omit<TerminalLog, 'output' | 'status'>) => void;
   appendTerminalOutput: (commandId: string, output: string) => void;
   endTerminalLog: (commandId: string) => void;
+  themeIndex: number;
+  setThemeIndex: (index: number) => void;
 }
 
 let toastCounter = 0;
@@ -145,4 +147,9 @@ export const useUIStore = create<UIStore>((set) => ({
           : log
       )
     })),
+  themeIndex: parseInt(localStorage.getItem('odoogit_themeIndex') || '0', 10),
+  setThemeIndex: (index) => {
+    localStorage.setItem('odoogit_themeIndex', index.toString());
+    set({ themeIndex: index });
+  },
 }));

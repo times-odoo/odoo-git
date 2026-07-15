@@ -104,7 +104,7 @@ const TerminalLine = React.memo(({ line }: { line: string }) => {
     if (ipythonInMatch) {
       const [_, num, cmdText] = ipythonInMatch;
       return (
-        <div className="font-mono text-[11px] py-[1.5px] leading-relaxed select-text">
+        <div className="font-mono py-[1.5px] leading-relaxed select-text">
           <span className="text-emerald-400 font-bold select-none">In [</span>
           <span className="text-emerald-300 font-bold select-none">{num}</span>
           <span className="text-emerald-400 font-bold select-none">]: </span>
@@ -118,7 +118,7 @@ const TerminalLine = React.memo(({ line }: { line: string }) => {
     if (ipythonOutMatch) {
       const [_, num, resText] = ipythonOutMatch;
       return (
-        <div className="font-mono text-[11px] py-[1.5px] leading-relaxed select-text">
+        <div className="font-mono py-[1.5px] leading-relaxed select-text">
           <span className="text-rose-500 font-bold select-none">Out[</span>
           <span className="text-rose-400 font-bold select-none">{num}</span>
           <span className="text-rose-500 font-bold select-none">]: </span>
@@ -134,7 +134,7 @@ const TerminalLine = React.memo(({ line }: { line: string }) => {
       const isPrimary = prompt === '>>>';
       const promptColor = isPrimary ? 'text-teal-400' : 'text-slate-500';
       return (
-        <div className="font-mono text-[11px] py-[1.5px] leading-relaxed select-text">
+        <div className="font-mono py-[1.5px] leading-relaxed select-text">
           <span className={`${promptColor} font-bold select-none mr-2`}>{prompt}</span>
           <span className="text-slate-100 font-semibold">{cmdText}</span>
         </div>
@@ -144,7 +144,7 @@ const TerminalLine = React.memo(({ line }: { line: string }) => {
     // 1. (Pdb) prompt
     if (line.trim() === '(Pdb)') {
       return (
-        <div className="font-mono text-[11px] py-[1.5px] text-teal-400 font-bold tracking-wider select-none">
+        <div className="font-mono py-[1.5px] text-teal-400 font-bold tracking-wider select-none">
           (Pdb)
         </div>
       );
@@ -155,7 +155,7 @@ const TerminalLine = React.memo(({ line }: { line: string }) => {
     if (dbgMatch) {
       const [_, filePath, lineNum, funcName] = dbgMatch;
       return (
-        <div className="font-mono text-[11px] py-[2px] border-b border-border/5 text-slate-350 leading-relaxed select-text">
+        <div className="font-mono py-[2px] border-b border-border/5 text-slate-350 leading-relaxed select-text">
           <span className="text-teal-400 font-bold mr-1">&gt;</span>
           <span className="text-teal-300 font-semibold hover:underline" title={filePath}>{filePath}</span>
           <span className="text-muted/40 font-semibold">(</span>
@@ -170,7 +170,7 @@ const TerminalLine = React.memo(({ line }: { line: string }) => {
     if (line.startsWith('> ')) {
       const command = line.substring(2);
       return (
-        <div className="font-mono text-[11px] py-[1.5px] leading-relaxed select-text text-slate-200">
+        <div className="font-mono py-[1.5px] leading-relaxed select-text text-slate-200">
           <span className="text-teal-400 font-bold select-none">&gt; </span>
           <span className="font-semibold text-slate-100">{command}</span>
         </div>
@@ -180,7 +180,7 @@ const TerminalLine = React.memo(({ line }: { line: string }) => {
     // 4. Code lines under debugger: ->  source_code
     if (line.trim().startsWith('->')) {
       return (
-        <div className="font-mono text-[11px] py-[1.5px] text-yellow-250/90 font-medium pl-4 select-text leading-relaxed">
+        <div className="font-mono py-[1.5px] text-yellow-250/90 font-medium pl-4 select-text leading-relaxed">
           {line}
         </div>
       );
@@ -199,7 +199,7 @@ const TerminalLine = React.memo(({ line }: { line: string }) => {
     }
 
     return (
-      <div className={`font-mono text-[11px] py-[1px] leading-relaxed break-all whitespace-pre-wrap ${colorClass} select-text`}>
+      <div className={`font-mono py-[1px] leading-relaxed break-all whitespace-pre-wrap ${colorClass} select-text`}>
         {line}
       </div>
     );
@@ -208,7 +208,7 @@ const TerminalLine = React.memo(({ line }: { line: string }) => {
   const [_, timestamp, pid, level, db, logger, message] = match;
 
   return (
-    <div className="font-mono text-[11px] py-[1.5px] border-b border-border/5 hover:bg-white/5 transition-colors leading-relaxed break-all whitespace-pre-wrap select-text">
+    <div className="font-mono py-[1.5px] border-b border-border/5 hover:bg-white/5 transition-colors leading-relaxed break-all whitespace-pre-wrap select-text">
       <span className="text-muted/40 select-none mr-2">{timestamp}</span>
       <span className="text-blue-400/40 select-none mr-1.5 font-light">[{pid}]</span>
       <span className={`mr-2 font-semibold ${getLevelClass(level)}`}>
@@ -632,6 +632,9 @@ export function OdooPanel() {
   const logsContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
 
+  const [terminalFontSize, setTerminalFontSize] = useState(11);
+  const [logLevelFilter, setLogLevelFilter] = useState<'ALL' | 'WARNING' | 'ERROR'>('ALL');
+
   const [isBreakpointMode, setIsBreakpointMode] = useState(() => {
     return localStorage.getItem('odoo_isBreakpointMode') === 'true';
   });
@@ -692,7 +695,17 @@ export function OdooPanel() {
     shouldAutoScrollRef.current = isAtBottom;
   };
 
-  const processedLines = logs;
+  const processedLines = useMemo(() => {
+    if (logLevelFilter === 'ALL') return logs;
+    return logs.filter(log => {
+      const match = log.text.match(ODOO_LOG_REGEX);
+      if (!match) return true; // Keep tracebacks and pdb
+      const level = match[3];
+      if (logLevelFilter === 'WARNING') return level === 'WARNING' || level === 'ERROR' || level === 'CRITICAL';
+      if (logLevelFilter === 'ERROR') return level === 'ERROR' || level === 'CRITICAL';
+      return true;
+    });
+  }, [logs, logLevelFilter]);
   const [activeTab, setActiveTab] = useState<'run' | 'upgrade' | 'test'>('run');
 
   // Creation/Duplication Modals
@@ -2197,7 +2210,7 @@ export function OdooPanel() {
 
     const crMatch = val.match(/(self\.)?env\.cr\.([a-zA-Z0-9_]*)$/);
     const envMatch = val.match(/(self\.)?env\.([a-zA-Z0-9_]*)$/);
-    const recordMatch = val.match(/self\.([a-zA-Z0-9_]*)$/);
+    const recordMatch = val.match(/([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]*)$/);
     const modelMatch = val.match(/(self\.)?env\[['"]([a-zA-Z0-9_\.]*)$/);
     const domainMatch = val.match(/\.(search|filtered)\(\s*\[\s*\(\s*['"][a-zA-Z0-9_]+['"]\s*,\s*['"]([a-zA-Z_=<>!]*)$/);
 
@@ -2233,9 +2246,10 @@ export function OdooPanel() {
         { text: 'lang', display: 'lang', type: 'env', doc: "env.lang -> str\n\nLanguage code string, e.g. 'en_US'." },
       ];
     } else if (recordMatch) {
-      typedFilter = recordMatch[1] || '';
-      list = [
-        ...dynamicCompletionsRef.current,
+      const varName = recordMatch[1];
+      typedFilter = recordMatch[2] || '';
+      
+      const baseList = [
         { text: 'read()', display: '.read(fields=None)', type: 'method', doc: 'read(fields=None) -> list[dict]\n\nRead the database values. Returns a list of dictionaries mapping field names to values.' },
         { text: 'browse()', display: '.browse(ids)', type: 'method', doc: 'browse(ids) -> recordset\n\nReturns a recordset for the database IDs provided.' },
         { text: 'search()', display: '.search(domain)', type: 'method', doc: 'search(domain) -> recordset\n\nSearches records matching given domain.' },
@@ -2253,6 +2267,17 @@ export function OdooPanel() {
         { text: '_name', display: '._name', type: 'property', doc: '_name -> str\n\nTechnical name of model.' },
         { text: 'env', display: '.env', type: 'property', doc: 'env -> Environment\n\nReturns the environment object.' },
       ];
+
+      list = [...dynamicCompletionsRef.current];
+      
+      // If it looks like a record (self, record, rec, etc) or dynamicCompletions is empty, add the base list
+      if (['self', 'record', 'rec', 'r'].includes(varName) || dynamicCompletionsRef.current.length === 0) {
+        // Add only those not already in dynamicCompletions
+        const dynamicKeys = new Set(dynamicCompletionsRef.current.map(c => c.text));
+        baseList.forEach(item => {
+          if (!dynamicKeys.has(item.text)) list.push(item);
+        });
+      }
     } else if (modelMatch) {
       typedFilter = modelMatch[2] || '';
       list = [
@@ -2702,8 +2727,49 @@ export function OdooPanel() {
           {/* Live Terminal Output Console */}
           <div className="flex-1 flex flex-col bg-slate-950 font-mono text-[11px] text-slate-200 overflow-hidden">
             <div className="px-3 py-2 bg-slate-900 border-b border-border/40 flex items-center justify-between shrink-0">
-              <span className="text-slate-400 font-bold uppercase text-[9px]">Server Logs Terminal</span>
+              <div className="flex items-center gap-4">
+                <span className="text-slate-400 font-bold uppercase text-[9px]">Server Logs</span>
+                <div className="flex items-center bg-slate-800 rounded px-1 py-0.5 text-[10px]">
+                  <button
+                    onClick={() => setLogLevelFilter('ALL')}
+                    className={`px-2 py-0.5 rounded transition-colors ${logLevelFilter === 'ALL' ? 'bg-slate-700 text-primary font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setLogLevelFilter('WARNING')}
+                    className={`px-2 py-0.5 rounded transition-colors ${logLevelFilter === 'WARNING' ? 'bg-amber-500/20 text-amber-400 font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    Warnings+
+                  </button>
+                  <button
+                    onClick={() => setLogLevelFilter('ERROR')}
+                    className={`px-2 py-0.5 rounded transition-colors ${logLevelFilter === 'ERROR' ? 'bg-rose-500/20 text-rose-400 font-semibold' : 'text-slate-400 hover:text-slate-200'}`}
+                  >
+                    Errors
+                  </button>
+                </div>
+              </div>
               <div className="flex items-center gap-3">
+                {isTerminalMaximized && (
+                  <div className="flex items-center gap-1 border border-slate-700/60 rounded bg-slate-800/40">
+                    <button
+                      onClick={() => setTerminalFontSize(prev => Math.max(8, prev - 1))}
+                      className="text-slate-400 hover:text-white px-2 py-0.5 text-[12px] transition-colors"
+                      title="Decrease font size"
+                    >
+                      A-
+                    </button>
+                    <span className="text-[10px] text-slate-500 font-mono w-4 text-center">{terminalFontSize}</span>
+                    <button
+                      onClick={() => setTerminalFontSize(prev => Math.min(24, prev + 1))}
+                      className="text-slate-400 hover:text-white px-2 py-0.5 text-[12px] transition-colors"
+                      title="Increase font size"
+                    >
+                      A+
+                    </button>
+                  </div>
+                )}
                 <button
                   onClick={() => setIsTerminalMaximized(!isTerminalMaximized)}
                   className="text-slate-400 hover:text-white text-[9px] transition-colors flex items-center gap-1 border border-slate-700/60 rounded px-1.5 py-0.5 bg-slate-800/40 hover:bg-slate-800"
@@ -2756,6 +2822,7 @@ export function OdooPanel() {
               ref={logsContainerRef}
               onScroll={handleScroll}
               className="flex-1 overflow-auto p-2.5 selection:bg-slate-700 select-text leading-tight whitespace-pre-wrap"
+              style={{ fontSize: `${terminalFontSize}px` }}
             >
               {processedLines.length === 0 ? (
                 <div className="text-slate-500 italic py-4 text-center">No terminal logs recorded yet. Start server to stream output.</div>
@@ -3103,6 +3170,7 @@ export function OdooPanel() {
               >
                 <span className="text-accent font-semibold text-[11px] select-none shrink-0">&gt;</span>
                 <input
+                  ref={stdinInputRef}
                   type="text"
                   value={stdinInput}
                   onChange={(e) => {

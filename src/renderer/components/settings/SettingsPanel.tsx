@@ -3,6 +3,7 @@ import { useUIStore } from '../../store/ui';
 import { useRepoStore } from '../../store/repos';
 import { useGitStore } from '../../store/git';
 import { Dropdown } from '../shared/Dropdown';
+import { THEME_TEMPLATES } from '../../utils/themes';
 
 export function SettingsPanel() {
   const activeRepoPath = useRepoStore((s) => s.activeRepoPath);
@@ -12,6 +13,10 @@ export function SettingsPanel() {
   const [defaultVersion, setDefaultVersion] = useState('master');
   const [alwaysOpenSeparateTerminal, setAlwaysOpenSeparateTerminal] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // Theme states
+  const themeIndex = useUIStore((s) => s.themeIndex);
+  const setThemeIndex = useUIStore((s) => s.setThemeIndex);
 
   // GitHub PAT state
   const [githubUsername, setGithubUsername] = useState('');
@@ -544,6 +549,40 @@ export function SettingsPanel() {
                 <button className="btn-accent" onClick={handleSave}>
                   Save Settings
                 </button>
+              </div>
+            </div>
+
+            {/* Theme Settings */}
+            <div className="border border-border rounded-lg bg-surface/5">
+              <div className="bg-surface/50 px-4 py-2.5 border-b border-border rounded-t-lg">
+                <span className="text-[13px] font-semibold text-primary">Theme Selection</span>
+              </div>
+              <div className="p-4">
+                <p className="text-[11px] text-muted leading-relaxed mb-4">
+                  Select a color template to instantly restyle the application.
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+                  {THEME_TEMPLATES.map((theme, idx) => (
+                    <div
+                      key={theme.name}
+                      onClick={() => setThemeIndex(idx)}
+                      className={`cursor-pointer rounded-lg border flex flex-col overflow-hidden transition-all duration-200 hover:scale-105 ${
+                        themeIndex === idx ? 'border-accent shadow-[0_0_8px_rgba(var(--color-accent),0.5)]' : 'border-border/50 hover:border-border'
+                      }`}
+                      style={{ backgroundColor: theme.bg }}
+                    >
+                      <div className="h-8 flex items-center justify-between px-2" style={{ backgroundColor: theme.surface }}>
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: `rgb(${theme.accent})` }} />
+                        <div className="text-[9px] font-mono opacity-60 text-white">{theme.name.split(' ')[0]}</div>
+                      </div>
+                      <div className="h-10 p-2 flex items-center justify-center">
+                        <span className="text-[10px] font-semibold tracking-wide" style={{ color: theme.primary }}>
+                          {theme.name}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
