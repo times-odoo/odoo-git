@@ -81,7 +81,7 @@ const renderFormattedMessage = (logger: string, message: string) => {
       );
     }
   }
-  
+
   if (message.toLowerCase().includes('deprecated') || message.toLowerCase().includes('warning')) {
     return <span className="text-amber-300/90">{message}</span>;
   }
@@ -197,7 +197,7 @@ const TerminalLine = React.memo(({ line }: { line: string }) => {
     } else if (line.startsWith('[App]')) {
       colorClass = 'text-sky-400 font-semibold';
     }
-    
+
     return (
       <div className={`font-mono text-[11px] py-[1px] leading-relaxed break-all whitespace-pre-wrap ${colorClass} select-text`}>
         {line}
@@ -242,31 +242,31 @@ export function ModuleSelector({ label, modules, onChange, allModules, placehold
   const query = inputValue.trim().toLowerCase();
   const filteredSuggestions = query
     ? allModules
-        .filter(m => 
-          m.toLowerCase().includes(query) && 
-          !m.startsWith('__') && 
-          !modules.some(exist => exist.toLowerCase() === m.toLowerCase())
-        )
-        .sort((a, b) => {
-          const aLower = a.toLowerCase();
-          const bLower = b.toLowerCase();
-          
-          // 1. Exact matches first
-          const aExact = aLower === query;
-          const bExact = bLower === query;
-          if (aExact && !bExact) return -1;
-          if (!aExact && bExact) return 1;
-          
-          // 2. Starts with query first
-          const aStarts = aLower.startsWith(query);
-          const bStarts = bLower.startsWith(query);
-          if (aStarts && !bStarts) return -1;
-          if (!aStarts && bStarts) return 1;
-          
-          // 3. Otherwise alphabetical
-          return aLower.localeCompare(bLower);
-        })
-        .slice(0, 150)
+      .filter(m =>
+        m.toLowerCase().includes(query) &&
+        !m.startsWith('__') &&
+        !modules.some(exist => exist.toLowerCase() === m.toLowerCase())
+      )
+      .sort((a, b) => {
+        const aLower = a.toLowerCase();
+        const bLower = b.toLowerCase();
+
+        // 1. Exact matches first
+        const aExact = aLower === query;
+        const bExact = bLower === query;
+        if (aExact && !bExact) return -1;
+        if (!aExact && bExact) return 1;
+
+        // 2. Starts with query first
+        const aStarts = aLower.startsWith(query);
+        const bStarts = bLower.startsWith(query);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+
+        // 3. Otherwise alphabetical
+        return aLower.localeCompare(bLower);
+      })
+      .slice(0, 150)
     : [];
 
   const addModule = (modName: string) => {
@@ -288,9 +288,8 @@ export function ModuleSelector({ label, modules, onChange, allModules, placehold
   return (
     <div className="relative">
       <label className="block text-[10px] text-muted font-bold uppercase mb-1">{label}</label>
-      <div className={`flex flex-wrap items-center gap-1.5 p-1.5 bg-[#0D1117]/60 border border-border rounded focus-within:border-accent/70 transition-colors w-full min-h-[34px] ${
-        disabled ? 'opacity-50 cursor-not-allowed pointer-events-none bg-[#0D1117]/30' : 'cursor-text'
-      }`}>
+      <div className={`flex flex-wrap items-center gap-1.5 p-1.5 bg-[#0D1117]/60 border border-border rounded focus-within:border-accent/70 transition-colors w-full min-h-[34px] ${disabled ? 'opacity-50 cursor-not-allowed pointer-events-none bg-[#0D1117]/30' : 'cursor-text'
+        }`}>
         {modules.map((m) => (
           <span
             key={m}
@@ -358,9 +357,8 @@ export function ModuleSelector({ label, modules, onChange, allModules, placehold
           {filteredSuggestions.map((suggestion, index) => (
             <div
               key={suggestion}
-              className={`px-3 py-1.5 font-mono text-[12px] cursor-pointer transition-colors ${
-                index === focusedIndex ? 'bg-accent/20 text-accent font-semibold' : 'text-primary hover:bg-border/30'
-              }`}
+              className={`px-3 py-1.5 font-mono text-[12px] cursor-pointer transition-colors ${index === focusedIndex ? 'bg-accent/20 text-accent font-semibold' : 'text-primary hover:bg-border/30'
+                }`}
               onClick={() => addModule(suggestion)}
             >
               {suggestion}
@@ -385,8 +383,8 @@ function AddonPathRow({ path, absPath, onRemove, disabled = false }: AddonPathRo
 
   // Find matching repository in the workspace
   const matchedRepo = useMemo(() => {
-    return repos.find(r => 
-      absPath.toLowerCase() === r.path.toLowerCase() || 
+    return repos.find(r =>
+      absPath.toLowerCase() === r.path.toLowerCase() ||
       absPath.toLowerCase().startsWith(r.path.toLowerCase() + '/')
     );
   }, [absPath, repos]);
@@ -417,9 +415,8 @@ function AddonPathRow({ path, absPath, onRemove, disabled = false }: AddonPathRo
   };
 
   return (
-    <div className={`flex items-center justify-between gap-3 py-1.5 px-3 hover:bg-[#161B22]/40 transition-colors first:rounded-t-md last:rounded-b-md relative ${
-      isDropdownOpen ? 'z-[50]' : 'z-auto'
-    }`}>
+    <div className={`flex items-center justify-between gap-3 py-1.5 px-3 hover:bg-[#161B22]/40 transition-colors first:rounded-t-md last:rounded-b-md relative ${isDropdownOpen ? 'z-[50]' : 'z-auto'
+      }`}>
       <div className="flex items-center gap-2 min-w-0 flex-1">
         {!disabled && (
           <button
@@ -642,6 +639,12 @@ export function OdooPanel() {
     localStorage.setItem('odoo_isBreakpointMode', String(isBreakpointMode));
   }, [isBreakpointMode]);
 
+  const isDebuggerOpen = useMemo(() => {
+    if (logs.length === 0) return false;
+    const lastLines = logs.slice(-5);
+    return lastLines.some(l => l.text.includes('(Pdb)') || l.text.includes('(ipdb)'));
+  }, [logs]);
+
   const [snippets, setSnippets] = useState<{ label: string; text: string; shortcut: string }[]>(() => {
     const saved = localStorage.getItem('odoo_debugSnippets');
     if (saved) {
@@ -650,7 +653,7 @@ export function OdooPanel() {
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     return [
       { label: '.read()', text: '.read()', shortcut: 'r' },
@@ -1591,7 +1594,7 @@ export function OdooPanel() {
       if (devAll) {
         args.push('--dev=all');
       }
-      
+
       const withDemoBool = withDemo === true;
       if (withDemoBool) {
         args.push('--with-demo');
@@ -1744,7 +1747,7 @@ export function OdooPanel() {
           const cleanChunk = stripAnsi(chunk);
           const endsWithNewline = cleanChunk.endsWith('\n');
           const parts = cleanChunk.split('\n');
-          
+
           for (let j = 0; j < parts.length; j++) {
             const part = parts[j];
             const isLastPart = j === parts.length - 1;
@@ -1793,7 +1796,7 @@ export function OdooPanel() {
   useEffect(() => {
     const unsubLog = window.odoo.onLog((text) => {
       const cleanText = stripAnsi(text);
-      
+
       if (isExecutingSilentCommandRef.current) {
         silentBufferRef.current += cleanText;
         if (silentBufferRef.current.includes('(Pdb)') || silentBufferRef.current.includes('(ipdb)')) {
@@ -1947,7 +1950,7 @@ export function OdooPanel() {
       const res = await window.odoo.getServerStatus();
       setServerStatus(res.status);
       if (res.cmd) setRunningCmd(res.cmd);
-    } catch {}
+    } catch { }
   };
 
 
@@ -2141,7 +2144,7 @@ export function OdooPanel() {
   const selectSuggestion = (item: Completion) => {
     setStdinInput((prev) => {
       const val = prev;
-      
+
       // Replace suffix based on what triggered the completion
       if (val.match(/self\.env\.cr\.[a-zA-Z0-9_]*$/)) {
         return val.replace(/self\.env\.cr\.[a-zA-Z0-9_]*$/, `self.env.cr.${item.text}`);
@@ -2161,7 +2164,7 @@ export function OdooPanel() {
       if (val.match(/self\.env\[['"][a-zA-Z0-9_\.]*$/)) {
         return val.replace(/self\.env\[['"][a-zA-Z0-9_\.]*$/, `self.env['${item.text}'`);
       }
-      
+
       const lastWordMatch = val.match(/[a-zA-Z_][a-zA-Z0-9_]*$/);
       if (lastWordMatch) {
         const lastWord = lastWordMatch[0];
@@ -2170,7 +2173,7 @@ export function OdooPanel() {
         }
         return val.slice(0, val.length - lastWord.length) + item.text;
       }
-      
+
       if (item.text.startsWith('.')) {
         return val + item.text;
       }
@@ -2434,7 +2437,7 @@ export function OdooPanel() {
         setServerStatus('starting');
         try {
           await window.odoo.dropDb(targetDb, dbUser, dbHost, dbPassword);
-        } catch {} // ignore error if database doesn't exist
+        } catch { } // ignore error if database doesn't exist
         await window.odoo.createDb(targetDb, upTemplateDb, dbUser, dbHost, dbPassword);
         setLogs((prev) => {
           const added: LogLine[] = [];
@@ -2526,7 +2529,7 @@ export function OdooPanel() {
   const handleStopServer = async () => {
     try {
       await window.odoo.stopServer();
-    } catch {}
+    } catch { }
   };
 
   const handleOpenExternalTerminal = async () => {
@@ -2647,13 +2650,12 @@ export function OdooPanel() {
             <span className="text-[10px] text-muted font-bold uppercase tracking-wider">Status:</span>
             <div className="flex items-center gap-1.5 bg-surface border border-border/60 rounded px-2.5 py-1">
               <span
-                className={`w-2 h-2 rounded-full ${
-                  serverStatus === 'running'
+                className={`w-2 h-2 rounded-full ${serverStatus === 'running'
                     ? 'bg-success animate-pulse'
                     : serverStatus === 'starting'
-                    ? 'bg-warning animate-pulse'
-                    : 'bg-muted'
-                }`}
+                      ? 'bg-warning animate-pulse'
+                      : 'bg-muted'
+                  }`}
               />
               <span className="text-[11px] font-mono text-primary font-bold uppercase tracking-wide">
                 {serverStatus === 'running' ? 'Running' : serverStatus === 'starting' ? 'Starting...' : 'Stopped'}
@@ -2803,11 +2805,10 @@ export function OdooPanel() {
                 <button
                   type="button"
                   onClick={() => setShowInfoModal(!showInfoModal)}
-                  className={`w-5 h-5 flex items-center justify-center rounded border transition-all shrink-0 mr-1 ${
-                    showInfoModal
+                  className={`w-5 h-5 flex items-center justify-center rounded border transition-all shrink-0 mr-1 ${showInfoModal
                       ? 'bg-amber-500/20 border-amber-500/60 text-amber-400'
                       : 'bg-slate-800 border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700'
-                  }`}
+                    }`}
                   title="Debugger Cheatsheet & Documentation"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -2817,11 +2818,10 @@ export function OdooPanel() {
                 <button
                   type="button"
                   onClick={() => setShowSnippetSettings(!showSnippetSettings)}
-                  className={`w-5 h-5 flex items-center justify-center rounded border transition-all shrink-0 ${
-                    showSnippetSettings
+                  className={`w-5 h-5 flex items-center justify-center rounded border transition-all shrink-0 ${showSnippetSettings
                       ? 'bg-accent/20 border-accent/60 text-accent'
                       : 'bg-slate-800 border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700'
-                  }`}
+                    }`}
                   title="Configure Snippets & Shortcuts"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -2855,22 +2855,20 @@ export function OdooPanel() {
                   <button
                     type="button"
                     onClick={() => setInfoActiveTab('pdb')}
-                    className={`flex-1 py-1 text-center font-semibold border-b-2 transition-all ${
-                      infoActiveTab === 'pdb'
+                    className={`flex-1 py-1 text-center font-semibold border-b-2 transition-all ${infoActiveTab === 'pdb'
                         ? 'border-accent text-accent'
                         : 'border-transparent text-slate-455 hover:text-slate-200'
-                    }`}
+                      }`}
                   >
                     Python Pdb
                   </button>
                   <button
                     type="button"
                     onClick={() => setInfoActiveTab('odoo')}
-                    className={`flex-1 py-1 text-center font-semibold border-b-2 transition-all ${
-                      infoActiveTab === 'odoo'
+                    className={`flex-1 py-1 text-center font-semibold border-b-2 transition-all ${infoActiveTab === 'odoo'
                         ? 'border-accent text-accent'
                         : 'border-transparent text-slate-455 hover:text-slate-200'
-                    }`}
+                      }`}
                   >
                     Odoo Specific
                   </button>
@@ -3077,9 +3075,8 @@ export function OdooPanel() {
                         }}
                         onMouseLeave={() => setHoveredSuggestion(null)}
                         onClick={() => selectSuggestion(item)}
-                        className={`flex items-center justify-between px-2.5 py-1.5 cursor-pointer text-left font-mono relative transition-colors ${
-                          isSelected ? 'bg-accent/20 text-accent font-semibold' : 'hover:bg-slate-800'
-                        }`}
+                        className={`flex items-center justify-between px-2.5 py-1.5 cursor-pointer text-left font-mono relative transition-colors ${isSelected ? 'bg-accent/20 text-accent font-semibold' : 'hover:bg-slate-800'
+                          }`}
                       >
                         <span className="truncate">{item.display}</span>
                         <span className="text-[9px] text-muted/60 lowercase italic shrink-0 ml-2">{item.type}</span>
@@ -3111,13 +3108,13 @@ export function OdooPanel() {
                   onChange={(e) => {
                     const val = e.target.value;
                     setStdinInput(val);
-                    
+
                     if (!autocompleteEnabled) {
                       setShowSuggestions(false);
                       setHoveredSuggestion(null);
                       return;
                     }
-                    
+
                     const lastWordMatch = val.match(/([a-zA-Z0-9_\.\[\]'"]+)$/);
                     if (lastWordMatch) {
                       const lastWord = lastWordMatch[1];
@@ -3203,9 +3200,8 @@ export function OdooPanel() {
                     <button
                       onClick={handleUpdateCurrentPreset}
                       disabled={isCheckingOut}
-                      className={`w-[36px] shrink-0 h-full flex items-center justify-center bg-success/15 border border-success/30 hover:bg-success/25 text-success rounded transition-colors ${
-                        isCheckingOut ? 'opacity-40 cursor-not-allowed' : ''
-                      }`}
+                      className={`w-[36px] shrink-0 h-full flex items-center justify-center bg-success/15 border border-success/30 hover:bg-success/25 text-success rounded transition-colors ${isCheckingOut ? 'opacity-40 cursor-not-allowed' : ''
+                        }`}
                       title="Save — update preset with current config"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3215,9 +3211,8 @@ export function OdooPanel() {
                     <button
                       onClick={() => handleDeletePreset(selectedPresetName)}
                       disabled={isCheckingOut}
-                      className={`w-[36px] shrink-0 h-full flex items-center justify-center bg-danger/15 border border-danger/30 hover:bg-danger/25 text-danger rounded transition-colors ${
-                        isCheckingOut ? 'opacity-40 cursor-not-allowed' : ''
-                      }`}
+                      className={`w-[36px] shrink-0 h-full flex items-center justify-center bg-danger/15 border border-danger/30 hover:bg-danger/25 text-danger rounded transition-colors ${isCheckingOut ? 'opacity-40 cursor-not-allowed' : ''
+                        }`}
                       title="Delete preset"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3229,9 +3224,8 @@ export function OdooPanel() {
                 <button
                   onClick={() => setShowSavePresetModal(true)}
                   disabled={isCheckingOut}
-                  className={`w-[36px] shrink-0 h-full flex items-center justify-center bg-accent/15 border border-accent/30 hover:bg-accent/25 text-accent rounded transition-colors ${
-                    isCheckingOut ? 'opacity-40 cursor-not-allowed' : ''
-                  }`}
+                  className={`w-[36px] shrink-0 h-full flex items-center justify-center bg-accent/15 border border-accent/30 hover:bg-accent/25 text-accent rounded transition-colors ${isCheckingOut ? 'opacity-40 cursor-not-allowed' : ''
+                    }`}
                   title="New preset — save current config as new preset"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3308,25 +3302,22 @@ export function OdooPanel() {
           <div className="flex border-b border-border bg-surface/10 shrink-0">
             <button
               onClick={() => setActiveTab('run')}
-              className={`px-4 py-2 text-[12px] font-medium border-b-2 transition-all ${
-                activeTab === 'run' ? 'text-accent border-accent bg-accent/5' : 'text-muted border-transparent hover:text-primary'
-              }`}
+              className={`px-4 py-2 text-[12px] font-medium border-b-2 transition-all ${activeTab === 'run' ? 'text-accent border-accent bg-accent/5' : 'text-muted border-transparent hover:text-primary'
+                }`}
             >
               Run Server
             </button>
             <button
               onClick={() => setActiveTab('upgrade')}
-              className={`px-4 py-2 text-[12px] font-medium border-b-2 transition-all ${
-                activeTab === 'upgrade' ? 'text-accent border-accent bg-accent/5' : 'text-muted border-transparent hover:text-primary'
-              }`}
+              className={`px-4 py-2 text-[12px] font-medium border-b-2 transition-all ${activeTab === 'upgrade' ? 'text-accent border-accent bg-accent/5' : 'text-muted border-transparent hover:text-primary'
+                }`}
             >
               Upgrade DB
             </button>
             <button
               onClick={() => setActiveTab('test')}
-              className={`px-4 py-2 text-[12px] font-medium border-b-2 transition-all ${
-                activeTab === 'test' ? 'text-accent border-accent bg-accent/5' : 'text-muted border-transparent hover:text-primary'
-              }`}
+              className={`px-4 py-2 text-[12px] font-medium border-b-2 transition-all ${activeTab === 'test' ? 'text-accent border-accent bg-accent/5' : 'text-muted border-transparent hover:text-primary'
+                }`}
             >
               Run Tests
             </button>
