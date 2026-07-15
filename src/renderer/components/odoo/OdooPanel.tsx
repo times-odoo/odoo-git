@@ -110,115 +110,115 @@ const TerminalLine = React.memo(({ line, isPicked, domId }: { line: string; isPi
       return <div className="h-4" />;
     }
 
-  const match = line.match(ODOO_LOG_REGEX);
-  if (!match) {
-    // IPython Input Prompt: In [1]: command
-    const ipythonInMatch = line.match(/^In\s*\[(\d+)\]:\s*(.*)$/);
-    if (ipythonInMatch) {
-      const [_, num, cmdText] = ipythonInMatch;
-      return (
-        <div className="font-mono py-[1.5px] leading-relaxed select-text">
-          <span className="text-emerald-400 font-bold select-none">In [</span>
-          <span className="text-emerald-300 font-bold select-none">{num}</span>
-          <span className="text-emerald-400 font-bold select-none">]: </span>
-          <span className="text-slate-100 font-semibold">{cmdText}</span>
-        </div>
-      );
-    }
+    const match = line.match(ODOO_LOG_REGEX);
+    if (!match) {
+      // IPython Input Prompt: In [1]: command
+      const ipythonInMatch = line.match(/^In\s*\[(\d+)\]:\s*(.*)$/);
+      if (ipythonInMatch) {
+        const [_, num, cmdText] = ipythonInMatch;
+        return (
+          <div className="font-mono py-[1.5px] leading-relaxed select-text">
+            <span className="text-emerald-400 font-bold select-none">In [</span>
+            <span className="text-emerald-300 font-bold select-none">{num}</span>
+            <span className="text-emerald-400 font-bold select-none">]: </span>
+            <span className="text-slate-100 font-semibold">{cmdText}</span>
+          </div>
+        );
+      }
 
-    // IPython Output Prompt: Out[1]: result
-    const ipythonOutMatch = line.match(/^Out\s*\[(\d+)\]:\s*(.*)$/);
-    if (ipythonOutMatch) {
-      const [_, num, resText] = ipythonOutMatch;
-      return (
-        <div className="font-mono py-[1.5px] leading-relaxed select-text">
-          <span className="text-rose-500 font-bold select-none">Out[</span>
-          <span className="text-rose-400 font-bold select-none">{num}</span>
-          <span className="text-rose-500 font-bold select-none">]: </span>
-          <span className="text-amber-200/90 font-medium">{resText}</span>
-        </div>
-      );
-    }
+      // IPython Output Prompt: Out[1]: result
+      const ipythonOutMatch = line.match(/^Out\s*\[(\d+)\]:\s*(.*)$/);
+      if (ipythonOutMatch) {
+        const [_, num, resText] = ipythonOutMatch;
+        return (
+          <div className="font-mono py-[1.5px] leading-relaxed select-text">
+            <span className="text-rose-500 font-bold select-none">Out[</span>
+            <span className="text-rose-400 font-bold select-none">{num}</span>
+            <span className="text-rose-500 font-bold select-none">]: </span>
+            <span className="text-amber-200/90 font-medium">{resText}</span>
+          </div>
+        );
+      }
 
-    // Python standard prompt: >>> command or ... command
-    const pythonPromptMatch = line.match(/^(>>>|\.\.\.)\s*(.*)$/);
-    if (pythonPromptMatch) {
-      const [_, prompt, cmdText] = pythonPromptMatch;
-      const isPrimary = prompt === '>>>';
-      const promptColor = isPrimary ? 'text-teal-400' : 'text-slate-500';
-      return (
-        <div className="font-mono py-[1.5px] leading-relaxed select-text">
-          <span className={`${promptColor} font-bold select-none mr-2`}>{prompt}</span>
-          <span className="text-slate-100 font-semibold">{cmdText}</span>
-        </div>
-      );
-    }
+      // Python standard prompt: >>> command or ... command
+      const pythonPromptMatch = line.match(/^(>>>|\.\.\.)\s*(.*)$/);
+      if (pythonPromptMatch) {
+        const [_, prompt, cmdText] = pythonPromptMatch;
+        const isPrimary = prompt === '>>>';
+        const promptColor = isPrimary ? 'text-teal-400' : 'text-slate-500';
+        return (
+          <div className="font-mono py-[1.5px] leading-relaxed select-text">
+            <span className={`${promptColor} font-bold select-none mr-2`}>{prompt}</span>
+            <span className="text-slate-100 font-semibold">{cmdText}</span>
+          </div>
+        );
+      }
 
-    // 1. (Pdb) prompt
-    if (line.trim() === '(Pdb)') {
-      return (
-        <div className="font-mono py-[1.5px] text-teal-400 font-bold tracking-wider select-none">
-          (Pdb)
-        </div>
-      );
-    }
+      // 1. (Pdb) prompt
+      if (line.trim() === '(Pdb)') {
+        return (
+          <div className="font-mono py-[1.5px] text-teal-400 font-bold tracking-wider select-none">
+            (Pdb)
+          </div>
+        );
+      }
 
-    // 2. Python File/Line breakpoint location: > /path/to/file.py(123)func_name()
-    const dbgMatch = line.match(/^>\s*(\/.*?\.py)\((\d+)\)(.*)$/);
-    if (dbgMatch) {
-      const [_, filePath, lineNum, funcName] = dbgMatch;
-      return (
-        <div className="font-mono py-[2px] border-b border-border/5 text-slate-350 leading-relaxed select-text">
-          <span className="text-teal-400 font-bold mr-1">&gt;</span>
-          <span className="text-teal-300 font-semibold hover:underline" title={filePath}>{filePath}</span>
-          <span className="text-muted/40 font-semibold">(</span>
-          <span className="text-amber-400 font-bold">{lineNum}</span>
-          <span className="text-muted/40 font-semibold">)</span>
-          <span className="text-sky-300 font-medium pl-1">{funcName}</span>
-        </div>
-      );
-    }
+      // 2. Python File/Line breakpoint location: > /path/to/file.py(123)func_name()
+      const dbgMatch = line.match(/^>\s*(\/.*?\.py)\((\d+)\)(.*)$/);
+      if (dbgMatch) {
+        const [_, filePath, lineNum, funcName] = dbgMatch;
+        return (
+          <div className="font-mono py-[2px] border-b border-border/5 text-slate-350 leading-relaxed select-text">
+            <span className="text-teal-400 font-bold mr-1">&gt;</span>
+            <span className="text-teal-300 font-semibold hover:underline" title={filePath}>{filePath}</span>
+            <span className="text-muted/40 font-semibold">(</span>
+            <span className="text-amber-400 font-bold">{lineNum}</span>
+            <span className="text-muted/40 font-semibold">)</span>
+            <span className="text-sky-300 font-medium pl-1">{funcName}</span>
+          </div>
+        );
+      }
 
-    // 3. User command entered (starts with "> ")
-    if (line.startsWith('> ')) {
-      const command = line.substring(2);
-      return (
-        <div className="font-mono py-[1.5px] leading-relaxed select-text text-slate-200">
-          <span className="text-teal-400 font-bold select-none">&gt; </span>
-          <span className="font-semibold text-slate-100">{command}</span>
-        </div>
-      );
-    }
+      // 3. User command entered (starts with "> ")
+      if (line.startsWith('> ')) {
+        const command = line.substring(2);
+        return (
+          <div className="font-mono py-[1.5px] leading-relaxed select-text text-slate-200">
+            <span className="text-teal-400 font-bold select-none">&gt; </span>
+            <span className="font-semibold text-slate-100">{command}</span>
+          </div>
+        );
+      }
 
-    // 4. Code lines under debugger: ->  source_code
-    if (line.trim().startsWith('->')) {
+      // 4. Code lines under debugger: ->  source_code
+      if (line.trim().startsWith('->')) {
+        return (
+          <div className="font-mono py-[1.5px] text-yellow-250/90 font-medium pl-4 select-text leading-relaxed">
+            {line}
+          </div>
+        );
+      }
+
+      // Default formatting for other outputs (tracebacks, general outputs, pdb stdout)
+      let colorClass = 'text-slate-300/95';
+      if (line.toLowerCase().includes('traceback') || line.startsWith('  File "')) {
+        colorClass = 'text-rose-400/90';
+      } else if (line.toLowerCase().includes('error') || line.toLowerCase().includes('exception')) {
+        colorClass = 'text-rose-400 font-semibold';
+      } else if (line.toLowerCase().includes('warning')) {
+        colorClass = 'text-amber-300/90';
+      } else if (line.startsWith('[App]')) {
+        colorClass = 'text-sky-400 font-semibold';
+      }
+
       return (
-        <div className="font-mono py-[1.5px] text-yellow-250/90 font-medium pl-4 select-text leading-relaxed">
+        <div className={`font-mono py-[1px] leading-relaxed break-all whitespace-pre-wrap ${colorClass} select-text`}>
           {line}
         </div>
       );
     }
 
-    // Default formatting for other outputs (tracebacks, general outputs, pdb stdout)
-    let colorClass = 'text-slate-300/95';
-    if (line.toLowerCase().includes('traceback') || line.startsWith('  File "')) {
-      colorClass = 'text-rose-400/90';
-    } else if (line.toLowerCase().includes('error') || line.toLowerCase().includes('exception')) {
-      colorClass = 'text-rose-400 font-semibold';
-    } else if (line.toLowerCase().includes('warning')) {
-      colorClass = 'text-amber-300/90';
-    } else if (line.startsWith('[App]')) {
-      colorClass = 'text-sky-400 font-semibold';
-    }
-
-    return (
-      <div className={`font-mono py-[1px] leading-relaxed break-all whitespace-pre-wrap ${colorClass} select-text`}>
-        {line}
-      </div>
-    );
-  }
-
-  const [_, timestamp, pid, level, db, logger, message] = match;
+    const [_, timestamp, pid, level, db, logger, message] = match;
 
     return (
       <div className="font-mono py-[1.5px] leading-relaxed break-all whitespace-pre-wrap select-text">
@@ -237,9 +237,8 @@ const TerminalLine = React.memo(({ line, isPicked, domId }: { line: string; isPi
   })();
 
   return (
-    <div id={domId} className={`group relative border-b transition-colors pr-8 ${
-      isPicked ? 'bg-accent/20 border-accent/50' : 'border-border/5 hover:bg-white/5'
-    }`}>
+    <div id={domId} className={`group relative border-b transition-colors pr-8 ${isPicked ? 'bg-accent/20 border-accent/50' : 'border-border/5 hover:bg-white/5'
+      }`}>
       {content}
       {line.trim() && (
         <button
@@ -2287,7 +2286,7 @@ export function OdooPanel() {
     } else if (recordMatch) {
       const varName = recordMatch[1];
       typedFilter = recordMatch[2] || '';
-      
+
       const baseList = [
         { text: 'read()', display: '.read(fields=None)', type: 'method', doc: 'read(fields=None) -> list[dict]\n\nRead the database values. Returns a list of dictionaries mapping field names to values.' },
         { text: 'browse()', display: '.browse(ids)', type: 'method', doc: 'browse(ids) -> recordset\n\nReturns a recordset for the database IDs provided.' },
@@ -2308,7 +2307,7 @@ export function OdooPanel() {
       ];
 
       list = [...dynamicCompletionsRef.current];
-      
+
       // If it looks like a record (self, record, rec, etc) or dynamicCompletions is empty, add the base list
       if (['self', 'record', 'rec', 'r'].includes(varName) || dynamicCompletionsRef.current.length === 0) {
         // Add only those not already in dynamicCompletions
@@ -2768,49 +2767,49 @@ export function OdooPanel() {
       {/* Header Panel */}
       {!isBreakpointMode && (
         <div className="flex items-center justify-between border-b border-border px-4 py-3 shrink-0 bg-surface/30">
-        <div className="flex items-center gap-3">
-          <h2 className="text-[15px] font-semibold text-primary tracking-wide">Odoo & PostgreSQL Integration</h2>
-          <div className="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-accent font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-            Branch: {currentBranch}
+          <div className="flex items-center gap-3">
+            <h2 className="text-[15px] font-semibold text-primary tracking-wide">Odoo & PostgreSQL Integration</h2>
+            <div className="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-accent font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+              Branch: {currentBranch}
+            </div>
           </div>
-        </div>
 
-        {/* Server Control / Status in Header */}
-        <div className="flex items-center gap-4 tour-odoo-run-btn">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted font-bold uppercase tracking-wider">Status:</span>
-            <div className="flex items-center gap-1.5 bg-surface border border-border/60 rounded px-2.5 py-1">
-              <span
-                className={`w-2 h-2 rounded-full ${serverStatus === 'running'
+          {/* Server Control / Status in Header */}
+          <div className="flex items-center gap-4 tour-odoo-run-btn">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted font-bold uppercase tracking-wider">Status:</span>
+              <div className="flex items-center gap-1.5 bg-surface border border-border/60 rounded px-2.5 py-1">
+                <span
+                  className={`w-2 h-2 rounded-full ${serverStatus === 'running'
                     ? 'bg-success animate-pulse'
                     : serverStatus === 'starting'
                       ? 'bg-warning animate-pulse'
                       : 'bg-muted'
-                  }`}
-              />
-              <span className="text-[11px] font-mono text-primary font-bold uppercase tracking-wide">
-                {serverStatus === 'running' ? 'Running' : serverStatus === 'starting' ? 'Starting...' : 'Stopped'}
-              </span>
+                    }`}
+                />
+                <span className="text-[11px] font-mono text-primary font-bold uppercase tracking-wide">
+                  {serverStatus === 'running' ? 'Running' : serverStatus === 'starting' ? 'Starting...' : 'Stopped'}
+                </span>
+              </div>
             </div>
-          </div>
 
-          {serverStatus !== 'stopped' ? (
-            <button
-              className="px-4 py-1.5 rounded text-[11px] bg-danger border border-danger hover:bg-danger/80 text-white font-bold transition-all shadow active:scale-95"
-              onClick={handleStopServer}
-            >
-              STOP SERVER
-            </button>
-          ) : (
-            <button
-              className="px-4 py-1.5 rounded text-[11px] bg-success border border-success hover:bg-success/80 text-white font-bold transition-all shadow active:scale-95"
-              onClick={handleStartServer}
-            >
-              START ODOO
-            </button>
-          )}
-        </div>
+            {serverStatus !== 'stopped' ? (
+              <button
+                className="px-4 py-1.5 rounded text-[11px] bg-danger border border-danger hover:bg-danger/80 text-white font-bold transition-all shadow active:scale-95"
+                onClick={handleStopServer}
+              >
+                STOP SERVER
+              </button>
+            ) : (
+              <button
+                className="px-4 py-1.5 rounded text-[11px] bg-success border border-success hover:bg-success/80 text-white font-bold transition-all shadow active:scale-95"
+                onClick={handleStartServer}
+              >
+                START ODOO
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -2823,14 +2822,14 @@ export function OdooPanel() {
           {/* Command Preview bar */}
           {!isBreakpointMode && (
             <div className="px-4 py-3 border-b border-border bg-surface/20 shrink-0">
-            <div className="space-y-1.5">
-              <div className="text-[10px] text-muted font-bold uppercase tracking-wider">
-                {serverStatus !== 'stopped' ? 'Running Command' : 'Command Preview'}
+              <div className="space-y-1.5">
+                <div className="text-[10px] text-muted font-bold uppercase tracking-wider">
+                  {serverStatus !== 'stopped' ? 'Running Command' : 'Command Preview'}
+                </div>
+                <div className="text-[10px] font-mono text-primary/80 whitespace-pre-wrap break-all border border-border/40 p-2 rounded bg-bg/50 select-all hover:text-primary transition-colors" title={serverStatus !== 'stopped' ? runningCmd : previewCmd}>
+                  {serverStatus !== 'stopped' ? runningCmd : previewCmd}
+                </div>
               </div>
-              <div className="text-[10px] font-mono text-primary/80 whitespace-pre-wrap break-all border border-border/40 p-2 rounded bg-bg/50 select-all hover:text-primary transition-colors" title={serverStatus !== 'stopped' ? runningCmd : previewCmd}>
-                {serverStatus !== 'stopped' ? runningCmd : previewCmd}
-              </div>
-            </div>
             </div>
           )}
 
@@ -2861,7 +2860,7 @@ export function OdooPanel() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                {isTerminalMaximized && (
+                {(isTerminalMaximized || isBreakpointMode) && (
                   <div className="flex items-center gap-1 border border-slate-700/60 rounded bg-slate-800/40">
                     <button
                       onClick={() => setTerminalFontSize(prev => Math.max(8, prev - 1))}
@@ -2949,11 +2948,11 @@ export function OdooPanel() {
                 processedLines.map((logLine) => {
                   const globalIdx = logs.findIndex(l => l.id === logLine.id);
                   return (
-                    <TerminalLine 
-                      key={logLine.id} 
-                      line={logLine.text} 
+                    <TerminalLine
+                      key={logLine.id}
+                      line={logLine.text}
                       domId={`terminal-line-${globalIdx}`}
-                      isPicked={pickerMode !== 'none' && globalIdx === pickerIndex} 
+                      isPicked={pickerMode !== 'none' && globalIdx === pickerIndex}
                     />
                   );
                 })
@@ -3002,8 +3001,8 @@ export function OdooPanel() {
                   type="button"
                   onClick={() => setShowInfoModal(!showInfoModal)}
                   className={`w-5 h-5 flex items-center justify-center rounded border transition-all shrink-0 mr-1 ${showInfoModal
-                      ? 'bg-amber-500/20 border-amber-500/60 text-amber-400'
-                      : 'bg-slate-800 border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700'
+                    ? 'bg-amber-500/20 border-amber-500/60 text-amber-400'
+                    : 'bg-slate-800 border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700'
                     }`}
                   title="Debugger Cheatsheet & Documentation"
                 >
@@ -3015,8 +3014,8 @@ export function OdooPanel() {
                   type="button"
                   onClick={() => setShowSnippetSettings(!showSnippetSettings)}
                   className={`w-5 h-5 flex items-center justify-center rounded border transition-all shrink-0 ${showSnippetSettings
-                      ? 'bg-accent/20 border-accent/60 text-accent'
-                      : 'bg-slate-800 border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700'
+                    ? 'bg-accent/20 border-accent/60 text-accent'
+                    : 'bg-slate-800 border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700'
                     }`}
                   title="Configure Snippets & Shortcuts"
                 >
@@ -3052,8 +3051,8 @@ export function OdooPanel() {
                     type="button"
                     onClick={() => setInfoActiveTab('pdb')}
                     className={`flex-1 py-1 text-center font-semibold border-b-2 transition-all ${infoActiveTab === 'pdb'
-                        ? 'border-accent text-accent'
-                        : 'border-transparent text-slate-455 hover:text-slate-200'
+                      ? 'border-accent text-accent'
+                      : 'border-transparent text-slate-455 hover:text-slate-200'
                       }`}
                   >
                     Python Pdb
@@ -3062,8 +3061,8 @@ export function OdooPanel() {
                     type="button"
                     onClick={() => setInfoActiveTab('odoo')}
                     className={`flex-1 py-1 text-center font-semibold border-b-2 transition-all ${infoActiveTab === 'odoo'
-                        ? 'border-accent text-accent'
-                        : 'border-transparent text-slate-455 hover:text-slate-200'
+                      ? 'border-accent text-accent'
+                      : 'border-transparent text-slate-455 hover:text-slate-200'
                       }`}
                   >
                     Odoo Specific
