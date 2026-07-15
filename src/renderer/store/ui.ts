@@ -81,7 +81,7 @@ interface UIStore {
   customThemeColor: string;
   setCustomThemeColor: (color: string) => void;
   appBackgroundImage: string;
-  setAppBackgroundImage: (image: string) => void;
+  setAppBackgroundImage: (url: string) => void;
   appBackgroundOpacity: number;
   setAppBackgroundOpacity: (opacity: number) => void;
 }
@@ -164,14 +164,13 @@ export const useUIStore = create<UIStore>((set) => ({
     set({ customThemeColor: color });
   },
   appBackgroundImage: localStorage.getItem('odoogit_appBackgroundImage') || '',
-  setAppBackgroundImage: (image) => {
-    localStorage.setItem('odoogit_appBackgroundImage', image);
-    set({ appBackgroundImage: image });
+  setAppBackgroundImage: (url) => {
+    localStorage.setItem('odoogit_appBackgroundImage', url);
+    set({ appBackgroundImage: url });
   },
-  appBackgroundOpacity: parseInt(localStorage.getItem('odoogit_appBackgroundOpacity') || '20', 10),
+  appBackgroundOpacity: parseInt(localStorage.getItem('odoogit_appBackgroundOpacity') || '5', 10),
   setAppBackgroundOpacity: (opacity) => {
     localStorage.setItem('odoogit_appBackgroundOpacity', opacity.toString());
     set({ appBackgroundOpacity: opacity });
   },
 }));
-

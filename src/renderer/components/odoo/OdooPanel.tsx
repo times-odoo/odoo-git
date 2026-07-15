@@ -2811,6 +2811,7 @@ export function OdooPanel() {
             </button>
           )}
         </div>
+        </div>
       )}
 
       {/* Main Split Section */}
@@ -2829,6 +2830,7 @@ export function OdooPanel() {
               <div className="text-[10px] font-mono text-primary/80 whitespace-pre-wrap break-all border border-border/40 p-2 rounded bg-bg/50 select-all hover:text-primary transition-colors" title={serverStatus !== 'stopped' ? runningCmd : previewCmd}>
                 {serverStatus !== 'stopped' ? runningCmd : previewCmd}
               </div>
+            </div>
             </div>
           )}
 
@@ -2879,6 +2881,15 @@ export function OdooPanel() {
                   </div>
                 )}
                 <button
+                  onClick={() => setIsBreakpointMode(!isBreakpointMode)}
+                  className={`text-slate-400 hover:text-white transition-colors p-1 rounded ${isBreakpointMode ? 'bg-accent/20 text-accent' : ''}`}
+                  title={isBreakpointMode ? "Exit Breakpoint Mode (Advanced Terminal)" : "Enter Breakpoint Mode (Advanced Terminal)"}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                  </svg>
+                </button>
+                <button
                   onClick={() => setIsTerminalMaximized(!isTerminalMaximized)}
                   className="text-slate-400 hover:text-white text-[9px] transition-colors flex items-center gap-1 border border-slate-700/60 rounded px-1.5 py-0.5 bg-slate-800/40 hover:bg-slate-800"
                   title={isTerminalMaximized ? "Exit full screen" : "Maximize terminal"}
@@ -2898,17 +2909,6 @@ export function OdooPanel() {
                       <span>Full Screen</span>
                     </>
                   )}
-                </button>
-                <button
-                  onClick={() => setIsBreakpointMode(!isBreakpointMode)}
-                  className={`text-[9px] transition-colors flex items-center gap-1 border rounded px-1.5 py-0.5 ${isBreakpointMode ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30' : 'text-slate-400 hover:text-white border-slate-700/60 bg-slate-800/40 hover:bg-slate-800'}`}
-                  title={isBreakpointMode ? "Exit Breakpoint Mode" : "Enter Breakpoint Mode (Advanced Terminal)"}
-                >
-                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" />
-                    <circle cx="12" cy="12" r="4" fill="currentColor" />
-                  </svg>
-                  <span>Breakpoint Mode</span>
                 </button>
                 <button
                   onClick={handleOpenExternalTerminal}
@@ -3356,7 +3356,7 @@ export function OdooPanel() {
         </div>
 
         {/* Resizable Divider Handle */}
-        {!(isTerminalMaximized || isBreakpointMode) && (
+        {!isTerminalMaximized && (
           <div
             onMouseDown={handleMouseDown}
             className="w-[4px] hover:w-[6px] bg-border hover:bg-accent cursor-col-resize transition-all h-full shrink-0 relative z-10 active:bg-accent"

@@ -19,6 +19,10 @@ export function SettingsPanel() {
   const setThemeIndex = useUIStore((s) => s.setThemeIndex);
   const customThemeColor = useUIStore((s) => s.customThemeColor);
   const setCustomThemeColor = useUIStore((s) => s.setCustomThemeColor);
+  const appBackgroundImage = useUIStore((s) => s.appBackgroundImage);
+  const setAppBackgroundImage = useUIStore((s) => s.setAppBackgroundImage);
+  const appBackgroundOpacity = useUIStore((s) => s.appBackgroundOpacity);
+  const setAppBackgroundOpacity = useUIStore((s) => s.setAppBackgroundOpacity);
 
   const hexToRgb = (hex: string) => {
     const r = parseInt(hex.slice(1, 3), 16);
@@ -632,37 +636,34 @@ export function SettingsPanel() {
               </div>
             </div>
 
-            {/* App Background Settings */}
+            {/* Background Image Settings */}
             <div className="border border-border rounded-lg bg-surface/5">
               <div className="bg-surface/50 px-4 py-2.5 border-b border-border rounded-t-lg">
-                <span className="text-[13px] font-semibold text-primary">App Background</span>
+                <span className="text-[13px] font-semibold text-primary">App Background Image</span>
               </div>
               <div className="p-4 space-y-4">
-                <p className="text-[11px] text-muted leading-relaxed">
-                  Set a custom background image for the app. The image will be applied as a full-screen overlay behind the UI. Adjust opacity to ensure readability.
-                </p>
                 <div>
-                  <label className="text-[12px] text-muted mb-1 block">Background Image (Local Path or URL)</label>
+                  <label className="text-[12px] text-muted mb-1 block">Background Image URL/Path</label>
+                  <p className="text-[11px] text-muted mb-1.5">
+                    Provide a valid image URL or absolute file path to display as the app background. (Leave empty for none)
+                  </p>
                   <input
                     type="text"
-                    className="input-field font-mono w-full text-[11px]"
-                    value={useUIStore((s) => s.appBackgroundImage)}
-                    onChange={(e) => useUIStore.getState().setAppBackgroundImage(e.target.value)}
-                    placeholder="/home/user/Pictures/bg.jpg or https://..."
+                    className="input-field w-full text-[12px]"
+                    value={appBackgroundImage}
+                    onChange={(e) => setAppBackgroundImage(e.target.value)}
+                    placeholder="https://example.com/image.png or /home/user/img.jpg"
                   />
                 </div>
                 <div>
-                  <label className="text-[12px] text-muted mb-1 flex items-center justify-between">
-                    <span>Opacity Overlay</span>
-                    <span className="text-accent">{useUIStore((s) => s.appBackgroundOpacity)}%</span>
-                  </label>
+                  <label className="text-[12px] text-muted mb-1 block">Background Opacity: {appBackgroundOpacity}%</label>
                   <input
                     type="range"
                     min="0"
                     max="100"
-                    className="w-full accent-accent cursor-pointer"
-                    value={useUIStore((s) => s.appBackgroundOpacity)}
-                    onChange={(e) => useUIStore.getState().setAppBackgroundOpacity(parseInt(e.target.value, 10))}
+                    value={appBackgroundOpacity}
+                    onChange={(e) => setAppBackgroundOpacity(parseInt(e.target.value))}
+                    className="w-full accent-accent"
                   />
                 </div>
               </div>
