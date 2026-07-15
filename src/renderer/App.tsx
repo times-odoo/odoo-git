@@ -158,6 +158,8 @@ const NAV_ITEMS: { panel: Panel; label: string; icon: React.ReactNode }[] = [
 export default function App() {
   const { repos, activeRepoPath, openRepo } = useRepo();
   const { activePanel, setActivePanel, terminalOpen } = useUIStore();
+  const appBackgroundImage = useUIStore((s) => s.appBackgroundImage);
+  const appBackgroundOpacity = useUIStore((s) => s.appBackgroundOpacity);
   const { refreshAll, fetchRepo } = useGit(activeRepoPath);
   const repoState = useGitStore((s) => (activeRepoPath ? s.repoStates[activeRepoPath] : null));
   const [initialized, setInitialized] = useState(false);
@@ -345,7 +347,18 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <div className="flex flex-col h-screen">
+      {appBackgroundImage && (
+        <div
+          className="fixed inset-0 pointer-events-none z-[-1]"
+          style={{
+            backgroundImage: `url(${appBackgroundImage})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: appBackgroundOpacity / 100,
+          }}
+        />
+      )}
+      <div className="flex flex-col h-screen bg-transparent">
         <TitleBar onStartTour={() => setShowTour(true)} />
         <RepoRail />
 
@@ -355,7 +368,7 @@ export default function App() {
             <div className="flex flex-1 overflow-hidden">
               {/* Navigation Sidebar */}
               {activePanel !== 'settings' && activePanel !== 'odoo' && (
-                <div className="w-44 bg-surface border-r border-border flex flex-col shrink-0 tour-nav-sidebar">
+                <div className="w-44 bg-surface/90 border-r border-border flex flex-col shrink-0 tour-nav-sidebar backdrop-blur-md">
                   {/* Current Branch Header */}
                   {status && (
                     <div className="p-3 border-b border-border">
@@ -427,7 +440,7 @@ export default function App() {
               )}
 
               {/* Main Panel */}
-              <div className="flex-1 overflow-hidden bg-bg relative tour-main-panel">
+              <div className="flex-1 overflow-hidden bg-bg/80 relative tour-main-panel backdrop-blur-sm">
                 {/* Odoo Panel (kept mounted to preserve state & logs) */}
                 <div className={`h-full w-full ${activePanel === 'odoo' ? 'block' : 'hidden'}`}>
                   <OdooPanel />
