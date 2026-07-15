@@ -17,6 +17,24 @@ export function SettingsPanel() {
   // Theme states
   const themeIndex = useUIStore((s) => s.themeIndex);
   const setThemeIndex = useUIStore((s) => s.setThemeIndex);
+  const customThemeColor = useUIStore((s) => s.customThemeColor);
+  const setCustomThemeColor = useUIStore((s) => s.setCustomThemeColor);
+
+  const hexToRgb = (hex: string) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `${r}, ${g}, ${b}`;
+  };
+
+  const rgbToHex = (rgb: string) => {
+    const parts = rgb.split(',').map(s => parseInt(s.trim()));
+    if (parts.length !== 3 || parts.some(isNaN)) return '#ff0000';
+    return '#' + parts.map(x => {
+      const hex = x.toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    }).join('');
+  };
 
   // GitHub PAT state
   const [githubUsername, setGithubUsername] = useState('');
@@ -582,6 +600,70 @@ export function SettingsPanel() {
                       </div>
                     </div>
                   ))}
+                  {/* Custom Theme Card */}
+                  <div
+                    onClick={() => setThemeIndex(-1)}
+                    className={`cursor-pointer rounded-lg border flex flex-col overflow-hidden transition-all duration-200 hover:scale-105 ${
+                      themeIndex === -1 ? 'border-accent shadow-[0_0_8px_rgba(var(--color-accent),0.5)]' : 'border-border/50 hover:border-border'
+                    }`}
+                    style={{ backgroundColor: THEME_TEMPLATES[0].bg }}
+                  >
+                    <div className="h-8 flex items-center justify-between px-2" style={{ backgroundColor: THEME_TEMPLATES[0].surface }}>
+                      <input
+                        type="color"
+                        value={rgbToHex(customThemeColor)}
+                        onChange={(e) => {
+                          setCustomThemeColor(hexToRgb(e.target.value));
+                          setThemeIndex(-1);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-5 h-5 p-0 border-0 rounded cursor-pointer bg-transparent"
+                        title="Pick custom accent color"
+                      />
+                      <div className="text-[9px] font-mono opacity-60 text-white">Custom</div>
+                    </div>
+                    <div className="h-10 p-2 flex items-center justify-center">
+                      <span className="text-[10px] font-semibold tracking-wide" style={{ color: THEME_TEMPLATES[0].primary }}>
+                        Custom Color
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* App Background Settings */}
+            <div className="border border-border rounded-lg bg-surface/5">
+              <div className="bg-surface/50 px-4 py-2.5 border-b border-border rounded-t-lg">
+                <span className="text-[13px] font-semibold text-primary">App Background</span>
+              </div>
+              <div className="p-4 space-y-4">
+                <p className="text-[11px] text-muted leading-relaxed">
+                  Set a custom background image for the app. The image will be applied as a full-screen overlay behind the UI. Adjust opacity to ensure readability.
+                </p>
+                <div>
+                  <label className="text-[12px] text-muted mb-1 block">Background Image (Local Path or URL)</label>
+                  <input
+                    type="text"
+                    className="input-field font-mono w-full text-[11px]"
+                    value={useUIStore((s) => s.appBackgroundImage)}
+                    onChange={(e) => useUIStore.getState().setAppBackgroundImage(e.target.value)}
+                    placeholder="/home/user/Pictures/bg.jpg or https://..."
+                  />
+                </div>
+                <div>
+                  <label className="text-[12px] text-muted mb-1 flex items-center justify-between">
+                    <span>Opacity Overlay</span>
+                    <span className="text-accent">{useUIStore((s) => s.appBackgroundOpacity)}%</span>
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    className="w-full accent-accent cursor-pointer"
+                    value={useUIStore((s) => s.appBackgroundOpacity)}
+                    onChange={(e) => useUIStore.getState().setAppBackgroundOpacity(parseInt(e.target.value, 10))}
+                  />
                 </div>
               </div>
             </div>

@@ -30,6 +30,18 @@ const resolveCarriageReturns = (text: string): { text: string; isOverwrite: bool
   return { text: result, isOverwrite };
 };
 
+const cleanLogLine = (rawLine: string) => {
+  const odooLogMatch = rawLine.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\s+(\d+)\s+(INFO|WARNING|ERROR|DEBUG|CRITICAL)\s+(\S+)\s+([\w\.\-]+):\s*(.*)$/);
+  if (odooLogMatch) {
+    return odooLogMatch[6].trim();
+  }
+  const pdbCodeMatch = rawLine.match(/^\s*(?:->\s*)?(?:\d+[\s\t]+)?(.*)$/);
+  if (pdbCodeMatch && pdbCodeMatch[1]) {
+    return pdbCodeMatch[1].trim();
+  }
+  return rawLine.trim();
+};
+
 const ODOO_LOG_REGEX = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\s+(\d+)\s+(INFO|WARNING|ERROR|DEBUG|CRITICAL)\s+(\S+)\s+([\w\.\-]+):\s*(.*)$/;
 const WERKZEUG_REGEX = /^([\d\.]+) - - \[(.*?)\] "(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH) (.*?) HTTP\/[0-9\.]+" (\d{3}) (.*)$/;
 
@@ -92,10 +104,11 @@ const renderFormattedMessage = (logger: string, message: string) => {
   return <span>{message}</span>;
 };
 
-const TerminalLine = React.memo(({ line }: { line: string }) => {
-  if (!line.trim()) {
-    return <div className="h-4" />;
-  }
+const TerminalLine = React.memo(({ line, isPicked, domId }: { line: string; isPicked?: boolean; domId?: string }) => {
+  const content = (() => {
+    if (!line.trim()) {
+      return <div className="h-4" />;
+    }
 
   const match = line.match(ODOO_LOG_REGEX);
   if (!match) {
@@ -207,18 +220,41 @@ const TerminalLine = React.memo(({ line }: { line: string }) => {
 
   const [_, timestamp, pid, level, db, logger, message] = match;
 
+    return (
+      <div className="font-mono py-[1.5px] leading-relaxed break-all whitespace-pre-wrap select-text">
+        <span className="text-muted/40 select-none mr-2">{timestamp}</span>
+        <span className="text-blue-400/40 select-none mr-1.5 font-light">[{pid}]</span>
+        <span className={`mr-2 font-semibold ${getLevelClass(level)}`}>
+          {level}
+        </span>
+        <span className="text-cyan-400/60 mr-2 font-medium">[{db}]</span>
+        <span className="text-amber-400/60 mr-1.5 font-medium">{logger}:</span>
+        <span className="text-primary/90 pl-0.5">
+          {renderFormattedMessage(logger, message)}
+        </span>
+      </div>
+    );
+  })();
+
   return (
-    <div className="font-mono py-[1.5px] border-b border-border/5 hover:bg-white/5 transition-colors leading-relaxed break-all whitespace-pre-wrap select-text">
-      <span className="text-muted/40 select-none mr-2">{timestamp}</span>
-      <span className="text-blue-400/40 select-none mr-1.5 font-light">[{pid}]</span>
-      <span className={`mr-2 font-semibold ${getLevelClass(level)}`}>
-        {level}
-      </span>
-      <span className="text-cyan-400/60 mr-2 font-medium">[{db}]</span>
-      <span className="text-amber-400/60 mr-1.5 font-medium">{logger}:</span>
-      <span className="text-primary/90 pl-0.5">
-        {renderFormattedMessage(logger, message)}
-      </span>
+    <div id={domId} className={`group relative border-b transition-colors pr-8 ${
+      isPicked ? 'bg-accent/20 border-accent/50' : 'border-border/5 hover:bg-white/5'
+    }`}>
+      {content}
+      {line.trim() && (
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(cleanLogLine(line));
+            window.dispatchEvent(new CustomEvent('odoo-toast', { detail: { message: 'Copied to clipboard', type: 'info' } }));
+          }}
+          className="opacity-0 group-hover:opacity-100 absolute right-1 top-1 text-slate-500 hover:text-primary transition-all p-1 bg-surface border border-border/50 rounded shadow-sm z-10 flex items-center justify-center"
+          title="Copy line"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 });
@@ -627,6 +663,9 @@ export function OdooPanel() {
     const saved = localStorage.getItem('odoo_leftWidth');
     return saved !== null ? parseFloat(saved) : 45;
   });
+
+  const [pickerMode, setPickerMode] = useState<'none' | 'line' | 'var'>('none');
+  const [pickerIndex, setPickerIndex] = useState(-1);
   const [isTerminalMaximized, setIsTerminalMaximized] = useState(false);
   const splitContainerRef = useRef<HTMLDivElement>(null);
   const logsContainerRef = useRef<HTMLDivElement>(null);
@@ -2315,6 +2354,15 @@ export function OdooPanel() {
   }, []);
 
   useEffect(() => {
+    if (showSuggestions && filteredSuggestions.length > 0) {
+      const el = document.getElementById(`suggestion-item-${activeSuggestionIndex}`);
+      if (el) {
+        el.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [activeSuggestionIndex, showSuggestions, filteredSuggestions.length]);
+
+  useEffect(() => {
     const handleUpdate = () => {
       if (stdinInputRef.current) {
         updateSuggestions(stdinInputRef.current.value);
@@ -2374,6 +2422,64 @@ export function OdooPanel() {
     if (e.altKey && matchingSnippet) {
       e.preventDefault();
       applySnippet(matchingSnippet.text);
+      return;
+    }
+
+    if (pickerMode !== 'none') {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setPickerIndex(prev => Math.max(0, prev - 1));
+        const el = document.getElementById(`terminal-line-${pickerIndex - 1}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setPickerIndex(prev => Math.min(logs.length - 1, prev + 1));
+        const el = document.getElementById(`terminal-line-${pickerIndex + 1}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setPickerMode('none');
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (pickerIndex >= 0 && pickerIndex < logs.length) {
+          const pickedLine = logs[pickerIndex].text;
+          if (pickerMode === 'line') {
+            setStdinInput(cleanLogLine(pickedLine));
+            setPickerMode('none');
+          } else if (pickerMode === 'var') {
+            const words = pickedLine.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || [];
+            const uniqueWords = Array.from(new Set(words)).filter(w => w.length > 2);
+            if (uniqueWords.length > 0) {
+              dynamicCompletionsRef.current = uniqueWords.map(w => ({ text: w, type: 'log-var', display: w }));
+              setFilteredSuggestions(dynamicCompletionsRef.current);
+              setActiveSuggestionIndex(0);
+              setShowSuggestions(true);
+            }
+            setPickerMode('none');
+          }
+        }
+      }
+      return;
+    }
+
+    if (e.altKey && e.key.toLowerCase() === 'l') {
+      e.preventDefault();
+      setPickerMode('line');
+      setPickerIndex(logs.length - 1);
+      setTimeout(() => {
+        const el = document.getElementById(`terminal-line-${logs.length - 1}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      }, 0);
+      return;
+    }
+    if (e.altKey && e.key.toLowerCase() === 'w') {
+      e.preventDefault();
+      setPickerMode('var');
+      setPickerIndex(logs.length - 1);
+      setTimeout(() => {
+        const el = document.getElementById(`terminal-line-${logs.length - 1}`);
+        if (el) el.scrollIntoView({ block: 'nearest' });
+      }, 0);
       return;
     }
 
@@ -2660,7 +2766,8 @@ export function OdooPanel() {
   return (
     <div className="flex flex-col h-full bg-bg select-none">
       {/* Header Panel */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3 shrink-0 bg-surface/30">
+      {!isBreakpointMode && (
+        <div className="flex items-center justify-between border-b border-border px-4 py-3 shrink-0 bg-surface/30">
         <div className="flex items-center gap-3">
           <h2 className="text-[15px] font-semibold text-primary tracking-wide">Odoo & PostgreSQL Integration</h2>
           <div className="flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full bg-accent/10 border border-accent/20 text-accent font-medium">
@@ -2704,16 +2811,17 @@ export function OdooPanel() {
             </button>
           )}
         </div>
-      </div>
+      )}
 
       {/* Main Split Section */}
       <div ref={splitContainerRef} className="flex flex-1 overflow-hidden">
         <div
-          style={{ width: isTerminalMaximized ? '100%' : `${leftWidth}%` }}
+          style={{ width: (isTerminalMaximized || isBreakpointMode) ? '100%' : `${leftWidth}%` }}
           className="flex flex-col border-r border-border h-full bg-surface/10 overflow-hidden shrink-0"
         >
           {/* Command Preview bar */}
-          <div className="px-4 py-3 border-b border-border bg-surface/20 shrink-0">
+          {!isBreakpointMode && (
+            <div className="px-4 py-3 border-b border-border bg-surface/20 shrink-0">
             <div className="space-y-1.5">
               <div className="text-[10px] text-muted font-bold uppercase tracking-wider">
                 {serverStatus !== 'stopped' ? 'Running Command' : 'Command Preview'}
@@ -2722,7 +2830,7 @@ export function OdooPanel() {
                 {serverStatus !== 'stopped' ? runningCmd : previewCmd}
               </div>
             </div>
-          </div>
+          )}
 
           {/* Live Terminal Output Console */}
           <div className="flex-1 flex flex-col bg-slate-950 font-mono text-[11px] text-slate-200 overflow-hidden">
@@ -2792,6 +2900,17 @@ export function OdooPanel() {
                   )}
                 </button>
                 <button
+                  onClick={() => setIsBreakpointMode(!isBreakpointMode)}
+                  className={`text-[9px] transition-colors flex items-center gap-1 border rounded px-1.5 py-0.5 ${isBreakpointMode ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30' : 'text-slate-400 hover:text-white border-slate-700/60 bg-slate-800/40 hover:bg-slate-800'}`}
+                  title={isBreakpointMode ? "Exit Breakpoint Mode" : "Enter Breakpoint Mode (Advanced Terminal)"}
+                >
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="4" fill="currentColor" />
+                  </svg>
+                  <span>Breakpoint Mode</span>
+                </button>
+                <button
                   onClick={handleOpenExternalTerminal}
                   className="text-slate-400 hover:text-white text-[9px] transition-colors flex items-center gap-1 border border-slate-700/60 rounded px-1.5 py-0.5 bg-slate-800/40 hover:bg-slate-800"
                   title="Open command in external Ubuntu terminal"
@@ -2827,7 +2946,17 @@ export function OdooPanel() {
               {processedLines.length === 0 ? (
                 <div className="text-slate-500 italic py-4 text-center">No terminal logs recorded yet. Start server to stream output.</div>
               ) : (
-                processedLines.map((logLine) => <TerminalLine key={logLine.id} line={logLine.text} />)
+                processedLines.map((logLine) => {
+                  const globalIdx = logs.findIndex(l => l.id === logLine.id);
+                  return (
+                    <TerminalLine 
+                      key={logLine.id} 
+                      line={logLine.text} 
+                      domId={`terminal-line-${globalIdx}`}
+                      isPicked={pickerMode !== 'none' && globalIdx === pickerIndex} 
+                    />
+                  );
+                })
               )}
               <div ref={terminalEndRef} />
             </div>
@@ -2958,6 +3087,8 @@ export function OdooPanel() {
                         { cmd: 'pp ', desc: 'Pretty print expression' },
                         { cmd: 'locals()', desc: 'Show dictionary of local variables' },
                         { cmd: 'globals()', desc: 'Show dictionary of global variables' },
+                        { cmd: 'Alt+L', desc: 'Pick a terminal line to copy to input' },
+                        { cmd: 'Alt+W', desc: 'Pick variables from a terminal line' },
                       ].map((item, idx) => (
                         <div
                           key={idx}
@@ -3136,6 +3267,7 @@ export function OdooPanel() {
                     return (
                       <div
                         key={idx}
+                        id={`suggestion-item-${idx}`}
                         onMouseEnter={() => {
                           setActiveSuggestionIndex(idx);
                           setHoveredSuggestion(item);
@@ -3168,7 +3300,7 @@ export function OdooPanel() {
                 onSubmit={handleSendStdin}
                 className="flex items-center gap-2 px-3 py-1.5 border-t border-border/20 bg-slate-950/80 shrink-0"
               >
-                <span className="text-accent font-semibold text-[11px] select-none shrink-0">&gt;</span>
+                <span className="text-accent font-semibold select-none shrink-0" style={{ fontSize: `${terminalFontSize}px` }}>&gt;</span>
                 <input
                   ref={stdinInputRef}
                   type="text"
@@ -3205,14 +3337,16 @@ export function OdooPanel() {
                   }}
                   onKeyDown={handleKeyDown}
                   placeholder="Type input here and press Enter to send to process (e.g. for pdb breakpoint)..."
-                  className="flex-1 bg-transparent border-none text-[11px] font-mono text-slate-100 focus:outline-none focus:ring-0 p-0 placeholder:text-slate-600"
+                  className="flex-1 bg-transparent border-none font-mono text-slate-100 focus:outline-none focus:ring-0 p-0 placeholder:text-slate-600"
+                  style={{ fontSize: `${terminalFontSize}px` }}
                 />
                 <button
                   type="submit"
-                  className="btn-accent w-[20px] h-[20px] p-0 flex items-center justify-center rounded shrink-0"
+                  className="btn-accent p-0 flex items-center justify-center rounded shrink-0 transition-all"
+                  style={{ width: `${Math.max(20, terminalFontSize * 1.5)}px`, height: `${Math.max(20, terminalFontSize * 1.5)}px` }}
                   title="Send input to process (Enter)"
                 >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <svg style={{ width: `${Math.max(12, terminalFontSize)}px`, height: `${Math.max(12, terminalFontSize)}px` }} fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"></path>
                   </svg>
                 </button>
@@ -3222,7 +3356,7 @@ export function OdooPanel() {
         </div>
 
         {/* Resizable Divider Handle */}
-        {!isTerminalMaximized && (
+        {!(isTerminalMaximized || isBreakpointMode) && (
           <div
             onMouseDown={handleMouseDown}
             className="w-[4px] hover:w-[6px] bg-border hover:bg-accent cursor-col-resize transition-all h-full shrink-0 relative z-10 active:bg-accent"
@@ -3232,8 +3366,8 @@ export function OdooPanel() {
         {/* Right Side: Virtual Environment + Server controls & Console */}
         <div
           style={{
-            width: isTerminalMaximized ? '0%' : `${100 - leftWidth}%`,
-            display: isTerminalMaximized ? 'none' : 'flex',
+            width: (isTerminalMaximized || isBreakpointMode) ? '0%' : `${100 - leftWidth}%`,
+            display: (isTerminalMaximized || isBreakpointMode) ? 'none' : 'flex',
           }}
           className="flex flex-col h-full overflow-hidden bg-bg shrink-0"
         >
