@@ -78,6 +78,12 @@ interface UIStore {
   endTerminalLog: (commandId: string) => void;
   themeIndex: number;
   setThemeIndex: (index: number) => void;
+  customThemeColor: string;
+  setCustomThemeColor: (color: string) => void;
+  appBackgroundImage: string;
+  setAppBackgroundImage: (image: string) => void;
+  appBackgroundOpacity: number;
+  setAppBackgroundOpacity: (opacity: number) => void;
 }
 
 let toastCounter = 0;
@@ -152,4 +158,20 @@ export const useUIStore = create<UIStore>((set) => ({
     localStorage.setItem('odoogit_themeIndex', index.toString());
     set({ themeIndex: index });
   },
+  customThemeColor: localStorage.getItem('odoogit_customThemeColor') || '255, 0, 0',
+  setCustomThemeColor: (color) => {
+    localStorage.setItem('odoogit_customThemeColor', color);
+    set({ customThemeColor: color });
+  },
+  appBackgroundImage: localStorage.getItem('odoogit_appBackgroundImage') || '',
+  setAppBackgroundImage: (image) => {
+    localStorage.setItem('odoogit_appBackgroundImage', image);
+    set({ appBackgroundImage: image });
+  },
+  appBackgroundOpacity: parseInt(localStorage.getItem('odoogit_appBackgroundOpacity') || '20', 10),
+  setAppBackgroundOpacity: (opacity) => {
+    localStorage.setItem('odoogit_appBackgroundOpacity', opacity.toString());
+    set({ appBackgroundOpacity: opacity });
+  },
 }));
+

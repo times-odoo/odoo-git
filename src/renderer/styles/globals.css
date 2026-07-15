@@ -6,11 +6,11 @@
 
 @layer base {
   :root {
-    --color-bg: #0F1117;
-    --color-surface: #161B22;
-    --color-border: #21262D;
-    --color-muted: #6E7681;
-    --color-primary: #E6EDF3;
+    --color-bg: 15, 17, 23;
+    --color-surface: 22, 27, 34;
+    --color-border: 33, 38, 45;
+    --color-muted: 110, 118, 129;
+    --color-primary: 230, 237, 243;
     --color-accent: 139, 76, 241;
     --color-accent-hover: 121, 59, 232;
   }
