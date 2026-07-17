@@ -2300,7 +2300,7 @@ export function OdooPanel() {
     setStdinInput((prev) => {
       const cursorPosition = stdinInputRef.current?.selectionStart ?? prev.length;
       const beforeCursor = prev.slice(0, cursorPosition);
-      const afterCursor = prev.slice(cursorPosition);
+      let afterCursor = prev.slice(cursorPosition);
       let newBeforeCursor = beforeCursor;
 
       // Replace suffix based on what triggered the completion
@@ -2314,8 +2314,13 @@ export function OdooPanel() {
         newBeforeCursor = beforeCursor.replace(/env\.[a-zA-Z0-9_]*$/, `env.${insertText}`);
       } else if (beforeCursor.match(/self\.[a-zA-Z0-9_]*$/)) {
         newBeforeCursor = beforeCursor.replace(/self\.[a-zA-Z0-9_]*$/, `self.${insertText}`);
-      } else if (beforeCursor.match(/self\.env\[['"][a-zA-Z0-9_\.]*$/)) {
-        newBeforeCursor = beforeCursor.replace(/self\.env\[['"][a-zA-Z0-9_\.]*$/, `self.env['${insertText}']`);
+      } else if (beforeCursor.match(/(?:self\.)?env\[['"][^'"]+['"]\]\.[a-zA-Z0-9_]*$/)) {
+        // self.env['model.name'].method — replace the method part after the dot
+        newBeforeCursor = beforeCursor.replace(/\.[a-zA-Z0-9_]*$/, `.${insertText}`);
+      } else if (beforeCursor.match(/(?:self\.)?env\[['"][a-zA-Z0-9_\.]*$/)) {
+        newBeforeCursor = beforeCursor.replace(/(?:self\.)?env\[['"][a-zA-Z0-9_\.]*$/, `self.env['${insertText}']`);
+        // Strip the closing quote+bracket that the macro originally inserted
+        afterCursor = afterCursor.replace(/^['"]\]/, '');
       } else {
         const lastWordMatch = beforeCursor.match(/[a-zA-Z_][a-zA-Z0-9_]*$/);
         if (lastWordMatch) {
@@ -2359,6 +2364,7 @@ export function OdooPanel() {
     const envMatch = val.match(/(self\.)?env\.([a-zA-Z0-9_]*)$/);
     const recordMatch = val.match(/([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]*)$/);
     const modelMatch = val.match(/(self\.)?env\[['"]([a-zA-Z0-9_\.]*)$/);
+    const envModelDotMatch = val.match(/(?:self\.)?env\[['"]([^'"]+)['"]\]\.([a-zA-Z0-9_]*)$/);
     const domainMatch = val.match(/\.(search|filtered)\(\s*\[\s*\(\s*['"][a-zA-Z0-9_]+['"]\s*,\s*['"]([a-zA-Z_=<>!]*)$/);
     const domainFieldMatch = val.match(/\.(search|filtered)\(\s*\[\s*\(\s*['"]([a-zA-Z0-9_]*)$/);
 
@@ -2411,6 +2417,43 @@ export function OdooPanel() {
         { text: 'cr', display: 'cr', type: 'env', doc: 'env.cr -> database cursor transaction' },
         { text: 'lang', display: 'lang', type: 'env', doc: "env.lang -> str\n\nLanguage code string, e.g. 'en_US'." },
       ];
+    } else if (envModelDotMatch) {
+      // self.env['model.name'].method — show ORM methods and fields
+      typedFilter = envModelDotMatch[2] || '';
+
+      const baseList = [
+        { text: 'read()', display: '.read(fields=None)', type: 'method', doc: 'read(fields=None) -> list[dict]\n\nRead database values.' },
+        { text: 'browse()', display: '.browse(ids)', type: 'method', doc: 'browse(ids) -> recordset\n\nReturns a recordset for given IDs.' },
+        { text: 'search()', display: '.search(domain)', type: 'method', doc: 'search(domain) -> recordset\n\nSearches records matching domain.' },
+        { text: 'search_count()', display: '.search_count(domain)', type: 'method', doc: 'search_count(domain) -> int\n\nCount records matching domain.' },
+        { text: 'fields_get()', display: '.fields_get(fields=None)', type: 'method', doc: 'fields_get(fields=None) -> dict\n\nGet field definitions.' },
+        { text: 'filtered()', display: '.filtered(func)', type: 'method', doc: 'filtered(func) -> recordset\n\nFilter records.' },
+        { text: 'mapped()', display: '.mapped(path)', type: 'method', doc: 'mapped(path) -> list or recordset\n\nMap field values.' },
+        { text: 'sorted()', display: '.sorted(key=None)', type: 'method', doc: 'sorted(key=None, reverse=False) -> recordset\n\nSort records.' },
+        { text: 'ensure_one()', display: '.ensure_one()', type: 'method', doc: 'ensure_one() -> None\n\nAssert exactly one record.' },
+        { text: 'exists()', display: '.exists()', type: 'method', doc: 'exists() -> recordset\n\nCheck records still exist.' },
+        { text: 'write()', display: '.write(vals)', type: 'method', doc: 'write(vals: dict) -> bool\n\nUpdate records.' },
+        { text: 'create()', display: '.create(vals)', type: 'method', doc: 'create(vals: dict) -> recordset\n\nCreate new records.' },
+        { text: 'unlink()', display: '.unlink()', type: 'method', doc: 'unlink() -> bool\n\nDelete records.' },
+        { text: 'copy()', display: '.copy(default=None)', type: 'method', doc: 'copy(default=None) -> recordset\n\nDuplicate record.' },
+        { text: 'with_context()', display: '.with_context(**kwargs)', type: 'method', doc: 'with_context(**kwargs) -> recordset\n\nReturn recordset with updated context.' },
+        { text: 'with_user()', display: '.with_user(user)', type: 'method', doc: 'with_user(user) -> recordset\n\nReturn recordset for given user.' },
+        { text: 'sudo()', display: '.sudo()', type: 'method', doc: 'sudo() -> recordset\n\nReturn recordset with superuser rights.' },
+        { text: 'name_search()', display: '.name_search(name)', type: 'method', doc: 'name_search(name) -> list\n\nSearch by display name.' },
+      ];
+
+      list = [...dynamicCompletionsRef.current];
+      if (dynamicCompletionsRef.current.length === 0 || dynamicCompletionsRef.current[0]?.type !== 'dynamic') {
+        const dynamicKeys = new Set(dynamicCompletionsRef.current.map(c => c.text));
+        baseList.forEach(item => {
+          if (!dynamicKeys.has(item.text)) list.push(item);
+        });
+      } else {
+        const dynamicKeys = new Set(dynamicCompletionsRef.current.map(c => c.text));
+        baseList.forEach(item => {
+          if (!dynamicKeys.has(item.text)) list.push(item);
+        });
+      }
     } else if (modelMatch) {
       typedFilter = modelMatch[2] || '';
       const baseModels = [
@@ -3489,6 +3532,17 @@ export function OdooPanel() {
                           silentBufferRef.current = '';
                           dynamicCompletionsRef.current = [];
                           const pyCmd = `import sys; m = env.registry.keys() if 'env' in locals() or 'env' in globals() else self.env.registry.keys() if 'self' in locals() else []; sys.stdout.write("___IDE___MODEL___" + ",".join(m) + "\\n")`;
+                          window.odoo.writeStdin(`!${pyCmd}\n`);
+                        }
+                      } else if (beforeCursor.match(/(?:self\.)?env\[['"]([^'"]+)['"]\]\.$/) && isDebuggerOpen) {
+                        // self.env['model.name']. — fetch fields/methods for this model
+                        const envModelMatch = beforeCursor.match(/(?:self\.)?env\[['"]([^'"]+)['"]\]\.$/);
+                        if (envModelMatch && !isExecutingSilentCommandRef.current) {
+                          const modelName = envModelMatch[1];
+                          isExecutingSilentCommandRef.current = true;
+                          silentBufferRef.current = '';
+                          dynamicCompletionsRef.current = [];
+                          const pyCmd = `import sys; sys.stdout.write("___IDE___ATTR___" + ",".join(eval("self.env['${modelName}']")._fields.keys()) + "\\n")`;
                           window.odoo.writeStdin(`!${pyCmd}\n`);
                         }
                       } else if (lastWord.endsWith('.') && lastWord !== '.' && isDebuggerOpen) {
