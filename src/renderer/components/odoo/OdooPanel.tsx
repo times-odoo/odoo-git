@@ -1879,8 +1879,25 @@ export function OdooPanel() {
         setLogs(limited);
       }
     };
+
+    const loadCache = async () => {
+      const stored = await window.odoo.getStoreValue('odooModels');
+      if (stored && Array.isArray(stored) && stored.length > 0) {
+        cachedModelsRef.current = stored.map(v => ({
+          text: v,
+          display: v,
+          type: 'model',
+          doc: `Model: ${v}`
+        }));
+      }
+    };
+    
     init();
+    loadCache();
   }, []);
+
+  // Cache for instantly serving models
+  const cachedModelsRef = useRef<Completion[]>([]);
 
   // A local ref to accumulate log chunks as they come from IPC
   const logBufferRef = useRef<string[]>([]);
@@ -1895,17 +1912,27 @@ export function OdooPanel() {
         silentBufferRef.current += cleanText;
         if (silentBufferRef.current.includes('(Pdb)') || silentBufferRef.current.includes('(ipdb)')) {
           isExecutingSilentCommandRef.current = false;
-          const match = silentBufferRef.current.match(/___IDE___(.*)/);
+          const match = silentBufferRef.current.match(/___IDE___([A-Z]+)___(.*)/);
           if (match) {
-            const rawVars = match[1].split('\n')[0].trim();
+            const ideType = match[1];
+            const rawVars = match[2].split('\n')[0].trim();
             if (rawVars) {
               const vars = rawVars.split(',').filter(Boolean);
-              dynamicCompletionsRef.current = vars.map((v) => ({
+              const comps = vars.map((v) => ({
                 text: v,
-                display: `.${v}`,
-                type: 'dynamic',
-                doc: `Dynamic Attribute:\n${v}`
+                display: ideType === 'MODEL' ? v : `.${v}`,
+                type: ideType === 'MODEL' ? 'model' : 'dynamic',
+                doc: ideType === 'MODEL' ? `Model: ${v}` : `Dynamic Attribute:\n${v}`
               }));
+              
+              dynamicCompletionsRef.current = comps;
+
+              if (ideType === 'MODEL') {
+                cachedModelsRef.current = [...comps];
+                window.odoo.setStoreValue('odooModels', vars);
+                addToast({ type: 'success', message: 'Odoo models registry cached successfully!' });
+              }
+
               setTimeout(() => window.dispatchEvent(new CustomEvent('odoo-update-suggestions')), 10);
             }
           }
@@ -2175,8 +2202,25 @@ export function OdooPanel() {
 
   const handleSendStdin = async (e: React.FormEvent) => {
     e.preventDefault();
+    shouldAutoScrollRef.current = true;
 
     const enteredText = stdinInput;
+
+    if (enteredText.trim() === '!refresh_models') {
+      if (serverStatus !== 'running') {
+        addToast({ type: 'error', message: 'Server must be running to refresh models.' });
+        return;
+      }
+      isExecutingSilentCommandRef.current = true;
+      silentBufferRef.current = '';
+      dynamicCompletionsRef.current = [];
+      const pyCmd = `import sys; m = env.registry.keys() if 'env' in locals() or 'env' in globals() else self.env.registry.keys() if 'self' in locals() else []; sys.stdout.write("___IDE___MODEL___" + ",".join(m) + "\\n")`;
+      window.odoo.writeStdin(`!${pyCmd}\n`);
+      addToast({ type: 'info', message: 'Refreshing model cache...' });
+      setStdinInput('');
+      return;
+    }
+
     if (!runShell) {
       setLogs((prev) => {
         const added: LogLine[] = [];
@@ -2236,42 +2280,60 @@ export function OdooPanel() {
   };
 
   const selectSuggestion = (item: Completion) => {
+    let insertText = item.text;
+    let cursorOffset = 0;
+
+    if (insertText === 'self.env') {
+      insertText = "self.env['']";
+      cursorOffset = -2;
+    } else if (insertText === 'search()') {
+      insertText = "search([])";
+      cursorOffset = -2;
+    } else if (insertText === 'browse()') {
+      insertText = "browse([])";
+      cursorOffset = -2;
+    } else if (insertText === 'filtered()') {
+      insertText = "filtered(lambda r: r.)";
+      cursorOffset = -1;
+    }
+
     setStdinInput((prev) => {
-      const val = prev;
+      const cursorPosition = stdinInputRef.current?.selectionStart ?? prev.length;
+      const beforeCursor = prev.slice(0, cursorPosition);
+      const afterCursor = prev.slice(cursorPosition);
+      let newBeforeCursor = beforeCursor;
 
       // Replace suffix based on what triggered the completion
-      if (val.match(/self\.env\.cr\.[a-zA-Z0-9_]*$/)) {
-        return val.replace(/self\.env\.cr\.[a-zA-Z0-9_]*$/, `self.env.cr.${item.text}`);
-      }
-      if (val.match(/env\.cr\.[a-zA-Z0-9_]*$/)) {
-        return val.replace(/env\.cr\.[a-zA-Z0-9_]*$/, `env.cr.${item.text}`);
-      }
-      if (val.match(/self\.env\.[a-zA-Z0-9_]*$/)) {
-        return val.replace(/self\.env\.[a-zA-Z0-9_]*$/, `self.env.${item.text}`);
-      }
-      if (val.match(/env\.[a-zA-Z0-9_]*$/)) {
-        return val.replace(/env\.[a-zA-Z0-9_]*$/, `env.${item.text}`);
-      }
-      if (val.match(/self\.[a-zA-Z0-9_]*$/)) {
-        return val.replace(/self\.[a-zA-Z0-9_]*$/, `self.${item.text}`);
-      }
-      if (val.match(/self\.env\[['"][a-zA-Z0-9_\.]*$/)) {
-        return val.replace(/self\.env\[['"][a-zA-Z0-9_\.]*$/, `self.env['${item.text}'`);
-      }
-
-      const lastWordMatch = val.match(/[a-zA-Z_][a-zA-Z0-9_]*$/);
-      if (lastWordMatch) {
-        const lastWord = lastWordMatch[0];
-        if (item.text.startsWith('.')) {
-          return val + item.text;
+      if (beforeCursor.match(/self\.env\.cr\.[a-zA-Z0-9_]*$/)) {
+        newBeforeCursor = beforeCursor.replace(/self\.env\.cr\.[a-zA-Z0-9_]*$/, `self.env.cr.${insertText}`);
+      } else if (beforeCursor.match(/env\.cr\.[a-zA-Z0-9_]*$/)) {
+        newBeforeCursor = beforeCursor.replace(/env\.cr\.[a-zA-Z0-9_]*$/, `env.cr.${insertText}`);
+      } else if (beforeCursor.match(/self\.env\.[a-zA-Z0-9_]*$/)) {
+        newBeforeCursor = beforeCursor.replace(/self\.env\.[a-zA-Z0-9_]*$/, `self.env.${insertText}`);
+      } else if (beforeCursor.match(/env\.[a-zA-Z0-9_]*$/)) {
+        newBeforeCursor = beforeCursor.replace(/env\.[a-zA-Z0-9_]*$/, `env.${insertText}`);
+      } else if (beforeCursor.match(/self\.[a-zA-Z0-9_]*$/)) {
+        newBeforeCursor = beforeCursor.replace(/self\.[a-zA-Z0-9_]*$/, `self.${insertText}`);
+      } else if (beforeCursor.match(/self\.env\[['"][a-zA-Z0-9_\.]*$/)) {
+        newBeforeCursor = beforeCursor.replace(/self\.env\[['"][a-zA-Z0-9_\.]*$/, `self.env['${insertText}']`);
+      } else {
+        const lastWordMatch = beforeCursor.match(/[a-zA-Z_][a-zA-Z0-9_]*$/);
+        if (lastWordMatch) {
+          const lastWord = lastWordMatch[0];
+          if (insertText.startsWith('.')) {
+            newBeforeCursor = beforeCursor + insertText;
+          } else {
+            newBeforeCursor = beforeCursor.slice(0, beforeCursor.length - lastWord.length) + insertText;
+          }
+        } else {
+          if (insertText.startsWith('.')) {
+            newBeforeCursor = beforeCursor + insertText;
+          } else {
+            newBeforeCursor = beforeCursor ? `${beforeCursor}${insertText}` : insertText;
+          }
         }
-        return val.slice(0, val.length - lastWord.length) + item.text;
       }
-
-      if (item.text.startsWith('.')) {
-        return val + item.text;
-      }
-      return val ? `${val}${item.text}` : item.text;
+      return newBeforeCursor + afterCursor;
     });
 
     setShowSuggestions(false);
@@ -2280,6 +2342,10 @@ export function OdooPanel() {
     setTimeout(() => {
       if (stdinInputRef.current) {
         stdinInputRef.current.focus();
+        if (cursorOffset < 0) {
+          const len = stdinInputRef.current.value.length;
+          stdinInputRef.current.setSelectionRange(len + cursorOffset, len + cursorOffset);
+        }
       }
     }, 10);
   };
@@ -2294,8 +2360,27 @@ export function OdooPanel() {
     const recordMatch = val.match(/([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]*)$/);
     const modelMatch = val.match(/(self\.)?env\[['"]([a-zA-Z0-9_\.]*)$/);
     const domainMatch = val.match(/\.(search|filtered)\(\s*\[\s*\(\s*['"][a-zA-Z0-9_]+['"]\s*,\s*['"]([a-zA-Z_=<>!]*)$/);
+    const domainFieldMatch = val.match(/\.(search|filtered)\(\s*\[\s*\(\s*['"]([a-zA-Z0-9_]*)$/);
 
-    if (domainMatch) {
+    if (domainFieldMatch) {
+      typedFilter = domainFieldMatch[2] || '';
+      list = [
+        { text: 'id', display: 'id', type: 'field', doc: 'Database ID' },
+        { text: 'name', display: 'name', type: 'field', doc: 'Record Name' },
+        { text: 'active', display: 'active', type: 'field', doc: 'Active boolean' },
+        { text: 'state', display: 'state', type: 'field', doc: 'State selection' },
+        { text: 'company_id', display: 'company_id', type: 'field', doc: 'Company relation' },
+        { text: 'create_uid', display: 'create_uid', type: 'field', doc: 'Created by User' },
+        { text: 'create_date', display: 'create_date', type: 'field', doc: 'Created on Date' },
+      ];
+      if (dynamicCompletionsRef.current.length > 0) {
+        dynamicCompletionsRef.current.forEach(c => {
+          if (c.type !== 'model' && !list.find(l => l.text === c.text)) {
+            list.push(c);
+          }
+        });
+      }
+    } else if (domainMatch) {
       typedFilter = domainMatch[2] || '';
       list = [
         { text: '=', display: '=', type: 'operator', doc: 'Equals' },
@@ -2326,6 +2411,27 @@ export function OdooPanel() {
         { text: 'cr', display: 'cr', type: 'env', doc: 'env.cr -> database cursor transaction' },
         { text: 'lang', display: 'lang', type: 'env', doc: "env.lang -> str\n\nLanguage code string, e.g. 'en_US'." },
       ];
+    } else if (modelMatch) {
+      typedFilter = modelMatch[2] || '';
+      const baseModels = [
+        { text: 'res.users', display: 'res.users', type: 'model', doc: 'res.users: Technical Odoo Users model' },
+        { text: 'res.partner', display: 'res.partner', type: 'model', doc: 'res.partner: Contacts, Customers, Vendors' },
+        { text: 'res.company', display: 'res.company', type: 'model', doc: 'res.company: Multi-company definitions' },
+        { text: 'account.move', display: 'account.move', type: 'model', doc: 'account.move: Journal entries and Customer invoices' },
+        { text: 'sale.order', display: 'sale.order', type: 'model', doc: 'sale.order: Sales Orders' },
+        { text: 'purchase.order', display: 'purchase.order', type: 'model', doc: 'purchase.order: Purchase Orders' },
+        { text: 'product.product', display: 'product.product', type: 'model', doc: 'product.product: Products variant record' },
+        { text: 'product.template', display: 'product.template', type: 'model', doc: 'product.template: Base product template definitions' },
+      ];
+
+      // Prefer cached models (persistent), then dynamic completions with model type, then fallback
+      if (cachedModelsRef.current.length > 0) {
+        list = [...cachedModelsRef.current];
+      } else if (dynamicCompletionsRef.current.length > 0 && dynamicCompletionsRef.current[0]?.type === 'model') {
+        list = [...dynamicCompletionsRef.current];
+      } else {
+        list = baseModels;
+      }
     } else if (recordMatch) {
       const varName = recordMatch[1];
       typedFilter = recordMatch[2] || '';
@@ -2351,26 +2457,12 @@ export function OdooPanel() {
 
       list = [...dynamicCompletionsRef.current];
 
-      // If it looks like a record (self, record, rec, etc) or dynamicCompletions is empty, add the base list
       if (['self', 'record', 'rec', 'r'].includes(varName) || dynamicCompletionsRef.current.length === 0) {
-        // Add only those not already in dynamicCompletions
         const dynamicKeys = new Set(dynamicCompletionsRef.current.map(c => c.text));
         baseList.forEach(item => {
           if (!dynamicKeys.has(item.text)) list.push(item);
         });
       }
-    } else if (modelMatch) {
-      typedFilter = modelMatch[2] || '';
-      list = [
-        { text: 'res.users', display: 'res.users', type: 'model', doc: 'res.users: Technical Odoo Users model' },
-        { text: 'res.partner', display: 'res.partner', type: 'model', doc: 'res.partner: Contacts, Customers, Vendors' },
-        { text: 'res.company', display: 'res.company', type: 'model', doc: 'res.company: Multi-company definitions' },
-        { text: 'account.move', display: 'account.move', type: 'model', doc: 'account.move: Journal entries and Customer invoices' },
-        { text: 'sale.order', display: 'sale.order', type: 'model', doc: 'sale.order: Sales Orders' },
-        { text: 'purchase.order', display: 'purchase.order', type: 'model', doc: 'purchase.order: Purchase Orders' },
-        { text: 'product.product', display: 'product.product', type: 'model', doc: 'product.product: Products variant record' },
-        { text: 'product.template', display: 'product.template', type: 'model', doc: 'product.template: Base product template definitions' },
-      ];
     } else {
       const lastWordMatch = val.match(/[a-zA-Z_][a-zA-Z0-9_]*$/);
       if (lastWordMatch) {
@@ -2407,7 +2499,9 @@ export function OdooPanel() {
   useEffect(() => {
     const handleUpdate = () => {
       if (stdinInputRef.current) {
-        updateSuggestions(stdinInputRef.current.value);
+        const val = stdinInputRef.current.value;
+        const cursorPosition = stdinInputRef.current.selectionStart || val.length;
+        updateSuggestions(val.slice(0, cursorPosition));
       }
     };
     window.addEventListener('odoo-update-suggestions', handleUpdate);
@@ -2422,7 +2516,9 @@ export function OdooPanel() {
         if (!next) {
           setShowSuggestions(false);
         } else {
-          updateSuggestions(stdinInput);
+          const val = stdinInput;
+          const cursorPosition = stdinInputRef.current?.selectionStart || val.length;
+          updateSuggestions(val.slice(0, cursorPosition));
         }
         return next;
       });
@@ -2439,7 +2535,7 @@ export function OdooPanel() {
         setActiveSuggestionIndex((prev) => (prev + 1) % filteredSuggestions.length);
         return;
       }
-      if (e.key === 'Tab' || e.key === 'Enter') {
+      if (e.key === 'Tab' || e.key === 'Enter' || e.key === 'ArrowRight') {
         e.preventDefault();
         selectSuggestion(filteredSuggestions[activeSuggestionIndex]);
         return;
@@ -3361,21 +3457,52 @@ export function OdooPanel() {
                       return;
                     }
 
-                    const lastWordMatch = val.match(/([a-zA-Z0-9_\.\[\]'"]+)$/);
-                    if (lastWordMatch) {
+                    const cursorPosition = e.target.selectionStart || val.length;
+                    const beforeCursor = val.slice(0, cursorPosition);
+
+                    const modelNameMatch = beforeCursor.match(/(?:self\.)?env\[['"]([^'"]+)['"]\].*(?:search|filtered)\(\s*\[\s*\(\s*['"]$/);
+                    const lastWordMatch = beforeCursor.match(/([a-zA-Z0-9_\.\[\]'"]+)$/);
+
+                    if (modelNameMatch && isDebuggerOpen) {
+                      const modelName = modelNameMatch[1];
+                      if (!isExecutingSilentCommandRef.current) {
+                        isExecutingSilentCommandRef.current = true;
+                        silentBufferRef.current = '';
+                        dynamicCompletionsRef.current = [];
+                        const pyCmd = `import sys; sys.stdout.write("___IDE___ATTR___" + ",".join(eval("self.env['${modelName}']")._fields.keys()) + "\\n")`;
+                        window.odoo.writeStdin(`!${pyCmd}\n`);
+                      }
+                      updateSuggestions(beforeCursor);
+                    } else if (lastWordMatch) {
                       const lastWord = lastWordMatch[1];
-                      if (lastWord.endsWith('.') && lastWord !== '.' && isDebuggerOpen) {
+
+                      // Check if we're inside env['...'] — typing a model name
+                      const insideModelQuotes = beforeCursor.match(/(?:self\.)?env\[['"][^'"]*$/);
+                      
+                      if (insideModelQuotes) {
+                        // We're typing a model name (e.g. self.env['account. or self.env['sal)
+                        // Just serve from cache, do NOT trigger any PDB query
+                        if (cachedModelsRef.current.length > 0) {
+                          dynamicCompletionsRef.current = [...cachedModelsRef.current];
+                        } else if (!isExecutingSilentCommandRef.current && isDebuggerOpen) {
+                          isExecutingSilentCommandRef.current = true;
+                          silentBufferRef.current = '';
+                          dynamicCompletionsRef.current = [];
+                          const pyCmd = `import sys; m = env.registry.keys() if 'env' in locals() or 'env' in globals() else self.env.registry.keys() if 'self' in locals() else []; sys.stdout.write("___IDE___MODEL___" + ",".join(m) + "\\n")`;
+                          window.odoo.writeStdin(`!${pyCmd}\n`);
+                        }
+                      } else if (lastWord.endsWith('.') && lastWord !== '.' && isDebuggerOpen) {
                         const varName = lastWord.slice(0, -1);
                         if (!isExecutingSilentCommandRef.current) {
                           isExecutingSilentCommandRef.current = true;
                           silentBufferRef.current = '';
                           dynamicCompletionsRef.current = [];
                           // Send silent evaluation to Pdb
-                          const pyCmd = `import sys; sys.stdout.write("___IDE___" + ",".join(eval("${varName}")._fields.keys() if hasattr(eval("${varName}"), "_fields") else dir(eval("${varName}"))) + "\\n")`;
+                          const pyCmd = `import sys; sys.stdout.write("___IDE___ATTR___" + ",".join(eval("${varName}")._fields.keys() if hasattr(eval("${varName}"), "_fields") else dir(eval("${varName}"))) + "\\n")`;
                           window.odoo.writeStdin(`!${pyCmd}\n`);
                         }
                       }
-                      updateSuggestions(val);
+                      updateSuggestions(beforeCursor);
                     } else {
                       setShowSuggestions(false);
                       setHoveredSuggestion(null);
