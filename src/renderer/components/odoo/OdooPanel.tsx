@@ -5,6 +5,12 @@ import { useUIStore } from '../../store/ui';
 import { Dropdown } from '../shared/Dropdown';
 import { DbDropdown } from '../shared/DbDropdown';
 import { useGit } from '../../hooks/useGit';
+import { SnippetModal } from './SnippetModal';
+import hljs from 'highlight.js/lib/core';
+import python from 'highlight.js/lib/languages/python';
+import 'highlight.js/styles/atom-one-dark.css';
+hljs.registerLanguage('python', python);
+
 interface LogLine {
   id: number;
   text: string;
@@ -29,6 +35,63 @@ const resolveCarriageReturns = (text: string): { text: string; isOverwrite: bool
   }
   return { text: result, isOverwrite };
 };
+
+export function computeSuggestionReplacement(beforeCursor: string, afterCursorStr: string, originalInsertText: string) {
+  let insertText = originalInsertText;
+  let cursorOffset = 0;
+
+  if (insertText === 'self.env') {
+    insertText = "self.env['']";
+    cursorOffset = -2;
+  } else if (insertText === 'search()') {
+    insertText = "search([])";
+    cursorOffset = -2;
+  } else if (insertText === 'browse()') {
+    insertText = "browse([])";
+    cursorOffset = -2;
+  } else if (insertText === 'filtered()') {
+    insertText = "filtered(lambda r: r.)";
+    cursorOffset = -1;
+  }
+
+  let afterCursor = afterCursorStr;
+  let newBeforeCursor = beforeCursor;
+
+  if (beforeCursor.match(/self\.env\.cr\.[a-zA-Z0-9_]*$/)) {
+    newBeforeCursor = beforeCursor.replace(/self\.env\.cr\.[a-zA-Z0-9_]*$/, `self.env.cr.${insertText}`);
+  } else if (beforeCursor.match(/env\.cr\.[a-zA-Z0-9_]*$/)) {
+    newBeforeCursor = beforeCursor.replace(/env\.cr\.[a-zA-Z0-9_]*$/, `env.cr.${insertText}`);
+  } else if (beforeCursor.match(/self\.env\.[a-zA-Z0-9_]*$/)) {
+    newBeforeCursor = beforeCursor.replace(/self\.env\.[a-zA-Z0-9_]*$/, `self.env.${insertText}`);
+  } else if (beforeCursor.match(/env\.[a-zA-Z0-9_]*$/)) {
+    newBeforeCursor = beforeCursor.replace(/env\.[a-zA-Z0-9_]*$/, `env.${insertText}`);
+  } else if (beforeCursor.match(/self\.[a-zA-Z0-9_]*$/)) {
+    newBeforeCursor = beforeCursor.replace(/self\.[a-zA-Z0-9_]*$/, `self.${insertText}`);
+  } else if (beforeCursor.match(/(?:self\.)?env\[['"][^'"]+['"]\]\.[a-zA-Z0-9_]*$/)) {
+    newBeforeCursor = beforeCursor.replace(/\.[a-zA-Z0-9_]*$/, `.${insertText}`);
+  } else if (beforeCursor.match(/(?:self\.)?env\[['"][a-zA-Z0-9_\.]*$/)) {
+    newBeforeCursor = beforeCursor.replace(/(?:self\.)?env\[['"][a-zA-Z0-9_\.]*$/, `self.env['${insertText}']`);
+    afterCursor = afterCursor.replace(/^['"]\]/, '');
+  } else {
+    const lastWordMatch = beforeCursor.match(/[a-zA-Z_][a-zA-Z0-9_]*$/);
+    if (lastWordMatch) {
+      const lastWord = lastWordMatch[0];
+      if (insertText.startsWith('.')) {
+        newBeforeCursor = beforeCursor + insertText;
+      } else {
+        newBeforeCursor = beforeCursor.slice(0, beforeCursor.length - lastWord.length) + insertText;
+      }
+    } else {
+      if (insertText.startsWith('.')) {
+        newBeforeCursor = beforeCursor + insertText;
+      } else {
+        newBeforeCursor = beforeCursor ? `${beforeCursor}${insertText}` : insertText;
+      }
+    }
+  }
+
+  return { newBeforeCursor, newAfterCursor: afterCursor, cursorOffset };
+}
 
 const cleanLogLine = (rawLine: string) => {
   const odooLogMatch = rawLine.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3})\s+(\d+)\s+(INFO|WARNING|ERROR|DEBUG|CRITICAL)\s+(\S+)\s+([\w\.\-]+):\s*(.*)$/);
@@ -233,6 +296,7 @@ const TerminalLine = React.memo(({ line, isPicked, domId, theme }: { line: strin
 
       // Default formatting for other outputs (tracebacks, general outputs, pdb stdout)
       let colorClass = isNotebook ? 'text-slate-800' : 'text-slate-300/95';
+      let isDataStructure = false;
       if (line.toLowerCase().includes('traceback') || line.startsWith('  File "')) {
         colorClass = isNotebook ? 'text-rose-700 font-medium' : 'text-rose-400/90';
       } else if (line.toLowerCase().includes('error') || line.toLowerCase().includes('exception')) {
@@ -241,6 +305,22 @@ const TerminalLine = React.memo(({ line, isPicked, domId, theme }: { line: strin
         colorClass = isNotebook ? 'text-amber-700' : 'text-amber-300/90';
       } else if (line.startsWith('[App]')) {
         colorClass = isNotebook ? 'text-sky-700 font-bold' : 'text-sky-400 font-semibold';
+      } else if (line.trim().match(/^(\{.*\}|\[.*\]|\w+\(.*?\))$/)) {
+        isDataStructure = true;
+      }
+
+      if (isDataStructure) {
+        try {
+          const highlighted = hljs.highlight(line, { language: 'python' }).value;
+          return (
+            <div 
+              className={`font-mono py-[1px] leading-relaxed break-all whitespace-pre-wrap hljs-container ${isNotebook ? 'hljs-light' : 'hljs-dark'} select-text`}
+              dangerouslySetInnerHTML={{ __html: highlighted }}
+            />
+          );
+        } catch (e) {
+          // fallback if highlighting fails
+        }
       }
 
       return (
@@ -632,7 +712,7 @@ function AddonPathRowsList({ value, onChange, disabled = false, communityRepoPat
 }
 
 
-interface Completion {
+export interface Completion {
   text: string;
   display: string;
   type: string;
@@ -757,6 +837,7 @@ export function OdooPanel() {
   };
 
   const [showSnippetSettings, setShowSnippetSettings] = useState(false);
+  const [isSnippetModalOpen, setIsSnippetModalOpen] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoActiveTab, setInfoActiveTab] = useState<'pdb' | 'odoo'>('pdb');
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false);
@@ -797,10 +878,10 @@ export function OdooPanel() {
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [dupSrcDb, setDupSrcDb] = useState('');
   const [dupDestDb, setDupDestDb] = useState('');
-
   // Drop DB confirm modal
   const [showDropConfirmModal, setShowDropConfirmModal] = useState(false);
   const [dropTargetDb, setDropTargetDb] = useState('');
+
 
   // Terminal scroll helper
   const terminalEndRef = useRef<HTMLDivElement>(null);
@@ -2280,65 +2361,15 @@ export function OdooPanel() {
   };
 
   const selectSuggestion = (item: Completion) => {
-    let insertText = item.text;
     let cursorOffset = 0;
-
-    if (insertText === 'self.env') {
-      insertText = "self.env['']";
-      cursorOffset = -2;
-    } else if (insertText === 'search()') {
-      insertText = "search([])";
-      cursorOffset = -2;
-    } else if (insertText === 'browse()') {
-      insertText = "browse([])";
-      cursorOffset = -2;
-    } else if (insertText === 'filtered()') {
-      insertText = "filtered(lambda r: r.)";
-      cursorOffset = -1;
-    }
-
     setStdinInput((prev) => {
       const cursorPosition = stdinInputRef.current?.selectionStart ?? prev.length;
       const beforeCursor = prev.slice(0, cursorPosition);
-      let afterCursor = prev.slice(cursorPosition);
-      let newBeforeCursor = beforeCursor;
-
-      // Replace suffix based on what triggered the completion
-      if (beforeCursor.match(/self\.env\.cr\.[a-zA-Z0-9_]*$/)) {
-        newBeforeCursor = beforeCursor.replace(/self\.env\.cr\.[a-zA-Z0-9_]*$/, `self.env.cr.${insertText}`);
-      } else if (beforeCursor.match(/env\.cr\.[a-zA-Z0-9_]*$/)) {
-        newBeforeCursor = beforeCursor.replace(/env\.cr\.[a-zA-Z0-9_]*$/, `env.cr.${insertText}`);
-      } else if (beforeCursor.match(/self\.env\.[a-zA-Z0-9_]*$/)) {
-        newBeforeCursor = beforeCursor.replace(/self\.env\.[a-zA-Z0-9_]*$/, `self.env.${insertText}`);
-      } else if (beforeCursor.match(/env\.[a-zA-Z0-9_]*$/)) {
-        newBeforeCursor = beforeCursor.replace(/env\.[a-zA-Z0-9_]*$/, `env.${insertText}`);
-      } else if (beforeCursor.match(/self\.[a-zA-Z0-9_]*$/)) {
-        newBeforeCursor = beforeCursor.replace(/self\.[a-zA-Z0-9_]*$/, `self.${insertText}`);
-      } else if (beforeCursor.match(/(?:self\.)?env\[['"][^'"]+['"]\]\.[a-zA-Z0-9_]*$/)) {
-        // self.env['model.name'].method — replace the method part after the dot
-        newBeforeCursor = beforeCursor.replace(/\.[a-zA-Z0-9_]*$/, `.${insertText}`);
-      } else if (beforeCursor.match(/(?:self\.)?env\[['"][a-zA-Z0-9_\.]*$/)) {
-        newBeforeCursor = beforeCursor.replace(/(?:self\.)?env\[['"][a-zA-Z0-9_\.]*$/, `self.env['${insertText}']`);
-        // Strip the closing quote+bracket that the macro originally inserted
-        afterCursor = afterCursor.replace(/^['"]\]/, '');
-      } else {
-        const lastWordMatch = beforeCursor.match(/[a-zA-Z_][a-zA-Z0-9_]*$/);
-        if (lastWordMatch) {
-          const lastWord = lastWordMatch[0];
-          if (insertText.startsWith('.')) {
-            newBeforeCursor = beforeCursor + insertText;
-          } else {
-            newBeforeCursor = beforeCursor.slice(0, beforeCursor.length - lastWord.length) + insertText;
-          }
-        } else {
-          if (insertText.startsWith('.')) {
-            newBeforeCursor = beforeCursor + insertText;
-          } else {
-            newBeforeCursor = beforeCursor ? `${beforeCursor}${insertText}` : insertText;
-          }
-        }
-      }
-      return newBeforeCursor + afterCursor;
+      const afterCursor = prev.slice(cursorPosition);
+      
+      const res = computeSuggestionReplacement(beforeCursor, afterCursor, item.text);
+      cursorOffset = res.cursorOffset;
+      return res.newBeforeCursor + res.newAfterCursor;
     });
 
     setShowSuggestions(false);
@@ -2347,7 +2378,7 @@ export function OdooPanel() {
     setTimeout(() => {
       if (stdinInputRef.current) {
         stdinInputRef.current.focus();
-        if (cursorOffset < 0) {
+        if (cursorOffset !== 0) {
           const len = stdinInputRef.current.value.length;
           stdinInputRef.current.setSelectionRange(len + cursorOffset, len + cursorOffset);
         }
@@ -2356,6 +2387,12 @@ export function OdooPanel() {
   };
 
   const updateSuggestions = useCallback((value: string) => {
+    if (!autocompleteEnabled) {
+      setShowSuggestions(false);
+      setHoveredSuggestion(null);
+      return;
+    }
+    
     const val = value;
     let list: Completion[] = [];
     let typedFilter = '';
@@ -2529,6 +2566,69 @@ export function OdooPanel() {
     setActiveSuggestionIndex(0);
     setShowSuggestions(filtered.length > 0);
   }, []);
+
+  const handleAutocompleteTrigger = useCallback((beforeCursor: string) => {
+    if (!autocompleteEnabled) {
+      setShowSuggestions(false);
+      setHoveredSuggestion(null);
+      return;
+    }
+
+    const modelNameMatch = beforeCursor.match(/(?:self\.)?env\[['"]([^'"]+)['"]\].*(?:search|filtered)\(\s*\[\s*\(\s*['"]$/);
+    const lastWordMatch = beforeCursor.match(/([a-zA-Z0-9_\.\[\]'"]+)$/);
+
+    if (modelNameMatch && isDebuggerOpen) {
+      const modelName = modelNameMatch[1];
+      if (!isExecutingSilentCommandRef.current) {
+        isExecutingSilentCommandRef.current = true;
+        silentBufferRef.current = '';
+        dynamicCompletionsRef.current = [];
+        const pyCmd = `import sys; sys.stdout.write("___IDE___ATTR___" + ",".join(eval("self.env['${modelName}']")._fields.keys()) + "\\n")`;
+        window.odoo.writeStdin(`!${pyCmd}\n`);
+      }
+      updateSuggestions(beforeCursor);
+    } else if (lastWordMatch) {
+      const lastWord = lastWordMatch[1];
+
+      // Check if we're inside env['...'] — typing a model name
+      const insideModelQuotes = beforeCursor.match(/(?:self\.)?env\[['"][^'"]*$/);
+      
+      if (insideModelQuotes) {
+        if (cachedModelsRef.current.length > 0) {
+          dynamicCompletionsRef.current = [...cachedModelsRef.current];
+        } else if (!isExecutingSilentCommandRef.current && isDebuggerOpen) {
+          isExecutingSilentCommandRef.current = true;
+          silentBufferRef.current = '';
+          dynamicCompletionsRef.current = [];
+          const pyCmd = `import sys; m = env.registry.keys() if 'env' in locals() or 'env' in globals() else self.env.registry.keys() if 'self' in locals() else []; sys.stdout.write("___IDE___MODEL___" + ",".join(m) + "\\n")`;
+          window.odoo.writeStdin(`!${pyCmd}\n`);
+        }
+      } else if (beforeCursor.match(/(?:self\.)?env\[['"]([^'"]+)['"]\]\.$/) && isDebuggerOpen) {
+        const envModelMatch = beforeCursor.match(/(?:self\.)?env\[['"]([^'"]+)['"]\]\.$/);
+        if (envModelMatch && !isExecutingSilentCommandRef.current) {
+          const modelName = envModelMatch[1];
+          isExecutingSilentCommandRef.current = true;
+          silentBufferRef.current = '';
+          dynamicCompletionsRef.current = [];
+          const pyCmd = `import sys; sys.stdout.write("___IDE___ATTR___" + ",".join(eval("self.env['${modelName}']")._fields.keys()) + "\\n")`;
+          window.odoo.writeStdin(`!${pyCmd}\n`);
+        }
+      } else if (lastWord.endsWith('.') && lastWord !== '.' && isDebuggerOpen) {
+        const varName = lastWord.slice(0, -1);
+        if (!isExecutingSilentCommandRef.current) {
+          isExecutingSilentCommandRef.current = true;
+          silentBufferRef.current = '';
+          dynamicCompletionsRef.current = [];
+          const pyCmd = `import sys; sys.stdout.write("___IDE___ATTR___" + ",".join(eval("${varName}")._fields.keys() if hasattr(eval("${varName}"), "_fields") else dir(eval("${varName}"))) + "\\n")`;
+          window.odoo.writeStdin(`!${pyCmd}\n`);
+        }
+      }
+      updateSuggestions(beforeCursor);
+    } else {
+      setShowSuggestions(false);
+      setHoveredSuggestion(null);
+    }
+  }, [autocompleteEnabled, isDebuggerOpen, updateSuggestions]);
 
   useEffect(() => {
     if (showSuggestions && filteredSuggestions.length > 0) {
@@ -3185,6 +3285,20 @@ export function OdooPanel() {
                 </div>
                 <button
                   type="button"
+                  onClick={() => setIsSnippetModalOpen(true)}
+                  className={`px-2 py-0.5 rounded border transition-all shrink-0 mr-1 flex items-center gap-1 ${isSnippetModalOpen
+                    ? 'bg-teal-500/20 border-teal-500/60 text-teal-400'
+                    : 'bg-slate-800 border-slate-700/60 text-slate-400 hover:text-white hover:bg-slate-700'
+                    }`}
+                  title="Open Snippet Editor"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+                  </svg>
+                  <span className="text-[10px] font-bold">Script Mode</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setShowInfoModal(!showInfoModal)}
                   className={`w-5 h-5 flex items-center justify-center rounded border transition-all shrink-0 mr-1 ${showInfoModal
                     ? 'bg-amber-500/20 border-amber-500/60 text-amber-400'
@@ -3493,74 +3607,9 @@ export function OdooPanel() {
                   onChange={(e) => {
                     const val = e.target.value;
                     setStdinInput(val);
-
-                    if (!autocompleteEnabled) {
-                      setShowSuggestions(false);
-                      setHoveredSuggestion(null);
-                      return;
-                    }
-
                     const cursorPosition = e.target.selectionStart || val.length;
                     const beforeCursor = val.slice(0, cursorPosition);
-
-                    const modelNameMatch = beforeCursor.match(/(?:self\.)?env\[['"]([^'"]+)['"]\].*(?:search|filtered)\(\s*\[\s*\(\s*['"]$/);
-                    const lastWordMatch = beforeCursor.match(/([a-zA-Z0-9_\.\[\]'"]+)$/);
-
-                    if (modelNameMatch && isDebuggerOpen) {
-                      const modelName = modelNameMatch[1];
-                      if (!isExecutingSilentCommandRef.current) {
-                        isExecutingSilentCommandRef.current = true;
-                        silentBufferRef.current = '';
-                        dynamicCompletionsRef.current = [];
-                        const pyCmd = `import sys; sys.stdout.write("___IDE___ATTR___" + ",".join(eval("self.env['${modelName}']")._fields.keys()) + "\\n")`;
-                        window.odoo.writeStdin(`!${pyCmd}\n`);
-                      }
-                      updateSuggestions(beforeCursor);
-                    } else if (lastWordMatch) {
-                      const lastWord = lastWordMatch[1];
-
-                      // Check if we're inside env['...'] — typing a model name
-                      const insideModelQuotes = beforeCursor.match(/(?:self\.)?env\[['"][^'"]*$/);
-                      
-                      if (insideModelQuotes) {
-                        // We're typing a model name (e.g. self.env['account. or self.env['sal)
-                        // Just serve from cache, do NOT trigger any PDB query
-                        if (cachedModelsRef.current.length > 0) {
-                          dynamicCompletionsRef.current = [...cachedModelsRef.current];
-                        } else if (!isExecutingSilentCommandRef.current && isDebuggerOpen) {
-                          isExecutingSilentCommandRef.current = true;
-                          silentBufferRef.current = '';
-                          dynamicCompletionsRef.current = [];
-                          const pyCmd = `import sys; m = env.registry.keys() if 'env' in locals() or 'env' in globals() else self.env.registry.keys() if 'self' in locals() else []; sys.stdout.write("___IDE___MODEL___" + ",".join(m) + "\\n")`;
-                          window.odoo.writeStdin(`!${pyCmd}\n`);
-                        }
-                      } else if (beforeCursor.match(/(?:self\.)?env\[['"]([^'"]+)['"]\]\.$/) && isDebuggerOpen) {
-                        // self.env['model.name']. — fetch fields/methods for this model
-                        const envModelMatch = beforeCursor.match(/(?:self\.)?env\[['"]([^'"]+)['"]\]\.$/);
-                        if (envModelMatch && !isExecutingSilentCommandRef.current) {
-                          const modelName = envModelMatch[1];
-                          isExecutingSilentCommandRef.current = true;
-                          silentBufferRef.current = '';
-                          dynamicCompletionsRef.current = [];
-                          const pyCmd = `import sys; sys.stdout.write("___IDE___ATTR___" + ",".join(eval("self.env['${modelName}']")._fields.keys()) + "\\n")`;
-                          window.odoo.writeStdin(`!${pyCmd}\n`);
-                        }
-                      } else if (lastWord.endsWith('.') && lastWord !== '.' && isDebuggerOpen) {
-                        const varName = lastWord.slice(0, -1);
-                        if (!isExecutingSilentCommandRef.current) {
-                          isExecutingSilentCommandRef.current = true;
-                          silentBufferRef.current = '';
-                          dynamicCompletionsRef.current = [];
-                          // Send silent evaluation to Pdb
-                          const pyCmd = `import sys; sys.stdout.write("___IDE___ATTR___" + ",".join(eval("${varName}")._fields.keys() if hasattr(eval("${varName}"), "_fields") else dir(eval("${varName}"))) + "\\n")`;
-                          window.odoo.writeStdin(`!${pyCmd}\n`);
-                        }
-                      }
-                      updateSuggestions(beforeCursor);
-                    } else {
-                      setShowSuggestions(false);
-                      setHoveredSuggestion(null);
-                    }
+                    handleAutocompleteTrigger(beforeCursor);
                   }}
                   onKeyDown={handleKeyDown}
                   className={`flex-1 bg-transparent border-none outline-none font-mono ${terminalTheme === 'notebook' ? 'placeholder:text-slate-400' : 'placeholder:text-slate-600'}`}
@@ -4367,6 +4416,49 @@ export function OdooPanel() {
           </div>
         </div>
       )}
+      
+      <SnippetModal
+        isOpen={isSnippetModalOpen}
+        onClose={() => setIsSnippetModalOpen(false)}
+        theme={terminalTheme}
+        autocompleteEnabled={autocompleteEnabled}
+        showSuggestions={showSuggestions}
+        filteredSuggestions={filteredSuggestions}
+        activeSuggestionIndex={activeSuggestionIndex}
+        onCursorChange={handleAutocompleteTrigger}
+        onNavigateSuggestions={(dir) => {
+           setActiveSuggestionIndex((prev) => {
+             let next = prev + dir;
+             if (next >= filteredSuggestions.length) next = 0;
+             if (next < 0) next = filteredSuggestions.length - 1;
+             return next;
+           });
+        }}
+        onCloseSuggestions={() => {
+           setShowSuggestions(false);
+           setHoveredSuggestion(null);
+        }}
+        onExecute={(code) => {
+          if (code.trim()) {
+            const isSilent = code.startsWith('!');
+            let finalCode = code;
+            
+            if (code.includes('\n')) {
+               const cleanCode = code.startsWith('!') ? code.substring(1) : code;
+               const b64 = btoa(unescape(encodeURIComponent(cleanCode)));
+               // Use compile(..., 'single') so that expressions still print their output in PDB
+               finalCode = `!import base64; exec(compile(base64.b64decode('${b64}').decode('utf-8'), '<snippet>', 'single'))`;
+            }
+            
+            window.odoo.writeStdin(`${finalCode}\n`);
+            setIsSnippetModalOpen(false);
+            setLogs((prev) => [
+              ...prev,
+              { id: lineCounterRef.current++, text: isSilent ? `> [Silent snippet executed]` : `> [Multi-line snippet executed]` }
+            ]);
+          }
+        }}
+      />
     </div>
   );
 }
