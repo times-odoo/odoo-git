@@ -104,18 +104,18 @@ export function SnippetModal({
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const triggerCursorCheck = (target: HTMLTextAreaElement) => {
     if (!autocompleteEnabled) return;
-    
-    const target = e.target;
     const cursorPosition = target.selectionStart;
     const value = target.value;
-    
     const lastNewlineIdx = value.lastIndexOf('\n', cursorPosition - 1);
     const lineStartIdx = lastNewlineIdx === -1 ? 0 : lastNewlineIdx + 1;
-    
     const beforeCursor = value.slice(lineStartIdx, cursorPosition);
     onCursorChange(beforeCursor);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    triggerCursorCheck(e.target);
   };
 
   return (
@@ -145,6 +145,12 @@ export function SnippetModal({
             ref={textareaRef}
             onKeyDown={handleKeyDown}
             onChange={handleChange}
+            onClick={(e) => triggerCursorCheck(e.currentTarget)}
+            onKeyUp={(e) => {
+              if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+                triggerCursorCheck(e.currentTarget);
+              }
+            }}
             placeholder="# Write multi-line python code here...\n# Press Ctrl+Enter to execute\n\nfor rec in self:\n    print(rec.name)"
             className={`w-full h-full p-3 font-mono text-[13px] resize-none outline-none rounded-lg ${isNotebook ? 'bg-white text-slate-800 placeholder:text-slate-400 border border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500' : 'bg-slate-950/50 text-slate-200 placeholder:text-slate-600 border border-transparent focus:border-slate-700 focus:bg-slate-950/80'}`}
             spellCheck={false}

@@ -840,12 +840,16 @@ export function OdooPanel() {
   const [isSnippetModalOpen, setIsSnippetModalOpen] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoActiveTab, setInfoActiveTab] = useState<'pdb' | 'odoo'>('pdb');
-  const [autocompleteEnabled, setAutocompleteEnabled] = useState(false);
+  const [autocompleteEnabled, setAutocompleteEnabled] = useState(() => {
+    const saved = localStorage.getItem('odoo_autocomplete_enabled');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredSuggestions, setFilteredSuggestions] = useState<Completion[]>([]);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
   const [hoveredSuggestion, setHoveredSuggestion] = useState<Completion | null>(null);
   const stdinInputRef = useRef<HTMLInputElement>(null);
+  const currentBeforeCursorRef = useRef<string>('');
   const isExecutingSilentCommandRef = useRef(false);
   const silentBufferRef = useRef<string>('');
   const dynamicCompletionsRef = useRef<Completion[]>([]);
@@ -2565,9 +2569,10 @@ export function OdooPanel() {
     setFilteredSuggestions(filtered);
     setActiveSuggestionIndex(0);
     setShowSuggestions(filtered.length > 0);
-  }, []);
+  }, [autocompleteEnabled]);
 
   const handleAutocompleteTrigger = useCallback((beforeCursor: string) => {
+    currentBeforeCursorRef.current = beforeCursor;
     if (!autocompleteEnabled) {
       setShowSuggestions(false);
       setHoveredSuggestion(null);
@@ -2641,7 +2646,10 @@ export function OdooPanel() {
 
   useEffect(() => {
     const handleUpdate = () => {
-      if (stdinInputRef.current) {
+      const beforeCursor = currentBeforeCursorRef.current;
+      if (beforeCursor) {
+        updateSuggestions(beforeCursor);
+      } else if (stdinInputRef.current) {
         const val = stdinInputRef.current.value;
         const cursorPosition = stdinInputRef.current.selectionStart || val.length;
         updateSuggestions(val.slice(0, cursorPosition));
@@ -3257,8 +3265,10 @@ export function OdooPanel() {
                 </span>
                 <button
                   onClick={() => {
-                    setAutocompleteEnabled(!autocompleteEnabled);
-                    if (autocompleteEnabled) setShowSuggestions(false);
+                    const next = !autocompleteEnabled;
+                    setAutocompleteEnabled(next);
+                    localStorage.setItem('odoo_autocomplete_enabled', String(next));
+                    if (!next) setShowSuggestions(false);
                   }}
                   className={`px-1.5 py-[1px] text-[8px] font-bold rounded uppercase shrink-0 transition-colors ${autocompleteEnabled ? 'bg-accent/20 text-accent border border-accent/40' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
                   title="Toggle smart autocomplete (Ctrl+Space)"
